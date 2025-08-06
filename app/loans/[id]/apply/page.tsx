@@ -21,7 +21,13 @@ const loan = {
   ],
 };
 
-export default function ApplyPage() {
+interface PageProps {
+  params: Promise<{
+    id: string;
+  }>;
+}
+
+export default function ApplyPage({ params }: PageProps) {
   return (
     <div className="py-12 px-4">
       <div className="max-w-4xl mx-auto">

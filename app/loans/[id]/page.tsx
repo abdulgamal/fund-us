@@ -3,13 +3,16 @@ import { Progress } from "@/components/ui/progress";
 import LoanDetailCard from "@/components/loans/LoanDetailsCard";
 import Link from "next/link";
 
-export default function LoanDetailsPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+interface PageProps {
+  params: Promise<{
+    id: string;
+  }>;
+}
+
+export default async function LoanDetailsPage({ params }: PageProps) {
+  const { id } = await params;
   const loan = {
-    id: params.id,
+    id,
     borrower: "AgriPro Inc.",
     loanType: "Commodity Purchase",
     amount: "$2,500,000",

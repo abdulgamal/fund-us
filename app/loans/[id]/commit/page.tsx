@@ -3,9 +3,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
-export default function CommitPage({ params }: { params: { id: string } }) {
+interface PageProps {
+  params: Promise<{
+    id: string;
+  }>;
+}
+
+export default async function CommitPage({ params }: PageProps) {
+  const { id } = await params;
   const loan = {
-    id: params.id,
+    id,
     borrower: "FreshHarvest Farms",
     loanType: "Seasonal Working Capital",
     amount: "$1,200,000",
