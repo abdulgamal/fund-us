@@ -7,11 +7,11 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              LoanMarket
+              LoanConnect
             </h3>
             <p className="text-gray-600">
-              Connecting borrowers with lenders for seamless financing
-              solutions.
+              Connecting pre-approved loans with institutional funders and
+              syndicates.
             </p>
           </div>
 
@@ -21,27 +21,18 @@ export function Footer() {
             </h4>
             <ul className="space-y-2">
               <li>
-                <Link
-                  href="/loans"
-                  className="text-gray-600 hover:text-indigo-600"
-                >
-                  Browse Loans
+                <Link href="#" className="text-gray-600 hover:text-indigo-600">
+                  List a Loan
                 </Link>
               </li>
               <li>
-                <Link
-                  href="/applications"
-                  className="text-gray-600 hover:text-indigo-600"
-                >
-                  My Applications
+                <Link href="#" className="text-gray-600 hover:text-indigo-600">
+                  Pricing
                 </Link>
               </li>
               <li>
-                <Link
-                  href="/auth/register"
-                  className="text-gray-600 hover:text-indigo-600"
-                >
-                  Create Account
+                <Link href="#" className="text-gray-600 hover:text-indigo-600">
+                  Requirements
                 </Link>
               </li>
             </ul>
@@ -49,23 +40,15 @@ export function Footer() {
 
           <div>
             <h4 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4">
-              Lenders
+              Funders
             </h4>
             <ul className="space-y-2">
               <li>
                 <Link
-                  href="/bank/dashboard"
+                  href="/funder/dashboard"
                   className="text-gray-600 hover:text-indigo-600"
                 >
-                  Lender Portal
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/auth/bank-register"
-                  className="text-gray-600 hover:text-indigo-600"
-                >
-                  Register as Lender
+                  Dashboard
                 </Link>
               </li>
               <li>
@@ -73,27 +56,32 @@ export function Footer() {
                   Syndication
                 </Link>
               </li>
+              <li>
+                <Link href="#" className="text-gray-600 hover:text-indigo-600">
+                  Funder Resources
+                </Link>
+              </li>
             </ul>
           </div>
 
           <div>
             <h4 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4">
-              Legal
+              Company
             </h4>
             <ul className="space-y-2">
               <li>
                 <Link href="#" className="text-gray-600 hover:text-indigo-600">
-                  Privacy Policy
+                  About
                 </Link>
               </li>
               <li>
                 <Link href="#" className="text-gray-600 hover:text-indigo-600">
-                  Terms of Service
+                  Contact
                 </Link>
               </li>
               <li>
                 <Link href="#" className="text-gray-600 hover:text-indigo-600">
-                  Compliance
+                  Careers
                 </Link>
               </li>
             </ul>
@@ -102,7 +90,7 @@ export function Footer() {
 
         <div className="mt-12 pt-8 border-t border-gray-200 text-center">
           <p className="text-gray-500 text-sm">
-            &copy; {new Date().getFullYear()} LoanMarket. All rights reserved.
+            &copy; {new Date().getFullYear()} LoanConnect. All rights reserved.
           </p>
         </div>
       </div>

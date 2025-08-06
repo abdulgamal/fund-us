@@ -8,26 +8,20 @@ export function Header() {
         <div className="flex justify-between h-16 items-center">
           <div className="flex items-center">
             <Link href="/" className="text-xl font-bold text-indigo-600">
-              LoanMarket
+              LoanConnect
             </Link>
             <nav className="hidden md:ml-10 md:flex space-x-8">
               <Link
                 href="/loans"
                 className="text-gray-700 hover:text-indigo-600"
               >
-                Browse Loans
+                Loan Marketplace
               </Link>
               <Link
-                href="/applications"
+                href="/funder/dashboard"
                 className="text-gray-700 hover:text-indigo-600"
               >
-                My Applications
-              </Link>
-              <Link
-                href="/bank/dashboard"
-                className="text-gray-700 hover:text-indigo-600"
-              >
-                For Lenders
+                Funder Portal
               </Link>
             </nav>
           </div>
@@ -41,9 +35,9 @@ export function Header() {
                 Sign In
               </Button>
             </Link>
-            <Link href="/auth/bank-register">
+            <Link href="/auth/funder-register">
               <Button className="bg-indigo-600 hover:bg-indigo-700">
-                Register
+                Register as Funder
               </Button>
             </Link>
           </div>
