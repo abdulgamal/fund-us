@@ -37,7 +37,7 @@ export function Header() {
             </Link>
             <Link href="/auth/funder-register">
               <Button className="bg-indigo-600 hover:bg-indigo-700">
-                Register as Funder
+                Register
               </Button>
             </Link>
           </div>

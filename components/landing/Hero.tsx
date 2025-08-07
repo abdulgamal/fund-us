@@ -13,9 +13,9 @@ export function Hero() {
           Secure full funding or syndicate deals with multiple partners.
         </p>
         <div className="flex gap-4 justify-center">
-          <Link href="/loans">
+          <Link href="/submit-loan">
             <Button size="lg" className="bg-indigo-600 hover:bg-indigo-700">
-              Browse Loan Opportunities
+              Submit Loan
             </Button>
           </Link>
           <Link href="/funder/dashboard">
