@@ -15,16 +15,16 @@ export function Hero() {
         <div className="flex gap-4 justify-center">
           <Link href="/submit-loan">
             <Button size="lg" className="bg-indigo-600 hover:bg-indigo-700">
-              Submit Loan
+              Apply For Loan
             </Button>
           </Link>
-          <Link href="/funder/dashboard">
+          <Link href="/loans">
             <Button
               size="lg"
               variant="outline"
               className="border-indigo-600 text-indigo-600"
             >
-              I'm a Funder
+              Fund a Loan
             </Button>
           </Link>
         </div>

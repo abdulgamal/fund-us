@@ -13,7 +13,7 @@ export function CTA() {
             </p>
             <Link href="/submit-loan">
               <button className="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700">
-                Submit Your Loan
+                Apply For Loan
               </button>
             </Link>
           </div>
@@ -22,9 +22,11 @@ export function CTA() {
             <p className="mb-4">
               Access vetted loan opportunities and build your portfolio.
             </p>
-            <button className="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700">
-              Register as Funder
-            </button>
+            <Link href={"/auth/funder-register"}>
+              <button className="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700">
+                Register as Funder
+              </button>
+            </Link>
           </div>
         </div>
       </div>
