@@ -103,7 +103,7 @@ export default async function LoanDetailsPage({ params }: PageProps) {
               items={loan.syndicateMembers.map((member) => ({
                 label: member.name,
                 value: member.committed,
-                badge: member.lead ? "Lead Arranger" : null,
+                badge: member.lead ? "Lead Investor" : null,
               }))}
             />
 

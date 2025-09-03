@@ -72,7 +72,14 @@ export default function LoanCard({ loan }: { loan: any }) {
             </Button>
           </Link>
           {loan.syndicateOpportunity && (
-            <Link href={`/loans/${loan.id}/commit`} className="flex-1">
+            <Link
+              href={
+                loan.fundedPercentage === 0
+                  ? `/loans/${loan.id}/commits`
+                  : `/loans/${loan.id}/commit`
+              }
+              className="flex-1"
+            >
               <Button
                 className={`w-full ${
                   loan.fundedPercentage === 0
