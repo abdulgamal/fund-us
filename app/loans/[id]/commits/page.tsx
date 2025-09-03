@@ -8,17 +8,18 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 
 interface PageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
-export default function CommitPage({ params }: PageProps) {
+export default async function CommitPage({ params }: PageProps) {
   const [isLeadInvestor, setIsLeadInvestor] = useState(false);
   const [commitmentAmount, setCommitmentAmount] = useState("");
+  const { id } = await params;
 
   const loan = {
-    id: params.id,
+    id: id,
     borrower: "FreshHarvest Farms",
     loanType: "Seasonal Working Capital",
     amount: "$1,200,000",
