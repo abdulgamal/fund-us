@@ -197,6 +197,7 @@ export default function RegisterPage() {
                   <option value="bank">Bank</option>
                   <option value="credit-union">Credit Union</option>
                   <option value="fund">Investment Fund</option>
+                  <option value="CDFI">CDFI</option>
                 </select>
               </div>
             </div>
