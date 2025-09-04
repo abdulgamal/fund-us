@@ -13,7 +13,7 @@ export default function LoginPage() {
           <p className="mt-2 text-sm text-gray-600">
             Or{" "}
             <a
-              href="/auth/bank-register"
+              href="/auth/funder-register"
               className="font-medium text-indigo-600 hover:text-indigo-500"
             >
               create a new account
