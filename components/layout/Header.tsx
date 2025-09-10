@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import Image from "next/image";
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -12,7 +13,13 @@ export function Header() {
         <div className="flex justify-between h-16 items-center">
           <div className="flex items-center">
             <Link href="/" className="text-xl font-bold text-indigo-600">
-              LoanConnect
+              <Image
+                src="/paysoko_logo_trans.png"
+                alt="Logo"
+                width={200}
+                height={40}
+                className="mr-2"
+              />
             </Link>
             <nav className="hidden md:ml-10 md:flex space-x-8">
               <Link
