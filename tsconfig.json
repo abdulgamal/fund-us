@@ -27,7 +27,7 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    "app/funder/onboarding/page.jsx"
+    "app/funder/onboarding/page-backup.jsx"
   ],
   "exclude": ["node_modules"]
 }
