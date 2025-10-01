@@ -34,6 +34,13 @@ export function Header() {
               >
                 Funder Portal
               </Link>
+              <Link
+                href="https://real-estate-wine-nine.vercel.app/"
+                target="_blank"
+                className="text-gray-700 hover:text-indigo-600"
+              >
+                Real Estate Marketplace
+              </Link>
             </nav>
           </div>
 
@@ -110,6 +117,13 @@ export function Header() {
             className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50"
           >
             Funder Portal
+          </Link>
+          <Link
+            href="https://real-estate-wine-nine.vercel.app/"
+            target="_blank"
+            className="text-gray-700 hover:text-indigo-600"
+          >
+            Real Estate Marketplace
           </Link>
           <Link
             href="/auth/login"
