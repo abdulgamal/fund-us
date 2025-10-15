@@ -3,9 +3,18 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import Image from "next/image";
+import { useAuthStore, logout } from "@/lib/api";
+import { useRouter } from "next/navigation";
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { isAuthenticated, user } = useAuthStore();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    logout();
+    router.push("/");
+  };
 
   return (
     <header className="bg-white shadow-sm">
@@ -45,20 +54,37 @@ export function Header() {
           </div>
 
           <div className="flex items-center space-x-4">
-            <div className="hidden md:flex space-x-4">
-              <Link href="/auth/login">
-                <Button
-                  variant="outline"
-                  className="border-indigo-600 text-indigo-600"
-                >
-                  Sign In
-                </Button>
-              </Link>
-              <Link href="/auth/funder-register">
-                <Button className="bg-indigo-600 hover:bg-indigo-700">
-                  Register
-                </Button>
-              </Link>
+            <div className="hidden md:flex space-x-4 items-center">
+              {isAuthenticated ? (
+                <>
+                  <span className="text-gray-700 font-medium">
+                    Welcome, {user?.name || user?.first_name}
+                  </span>
+                  <Button
+                    onClick={handleLogout}
+                    variant="outline"
+                    className="border-indigo-600 text-indigo-600"
+                  >
+                    Logout
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Link href="/auth/login">
+                    <Button
+                      variant="outline"
+                      className="border-indigo-600 text-indigo-600"
+                    >
+                      Sign In
+                    </Button>
+                  </Link>
+                  <Link href="/auth/funder-register">
+                    <Button className="bg-indigo-600 hover:bg-indigo-700">
+                      Register
+                    </Button>
+                  </Link>
+                </>
+              )}
             </div>
 
             {/* Mobile menu button */}
@@ -121,22 +147,39 @@ export function Header() {
           <Link
             href="https://real-estate-wine-nine.vercel.app/"
             target="_blank"
-            className="text-gray-700 hover:text-indigo-600"
+            className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50"
           >
             Real Estate Marketplace
           </Link>
-          <Link
-            href="/auth/login"
-            className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50"
-          >
-            Sign In
-          </Link>
-          <Link
-            href="/auth/funder-register"
-            className="block px-3 py-2 rounded-md text-base font-medium text-indigo-600 hover:text-indigo-800 hover:bg-gray-50"
-          >
-            Register
-          </Link>
+          
+          {isAuthenticated ? (
+            <>
+              <div className="px-3 py-2 text-base font-medium text-gray-700">
+                Welcome, {user?.name || user?.first_name}
+              </div>
+              <button
+                onClick={handleLogout}
+                className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-indigo-600 hover:text-indigo-800 hover:bg-gray-50"
+              >
+                Logout
+              </button>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/auth/login"
+                className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50"
+              >
+                Sign In
+              </Link>
+              <Link
+                href="/auth/funder-register"
+                className="block px-3 py-2 rounded-md text-base font-medium text-indigo-600 hover:text-indigo-800 hover:bg-gray-50"
+              >
+                Register
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>

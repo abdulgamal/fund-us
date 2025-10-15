@@ -1,12 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { apiPost, apiGet, login } from "@/lib/api";
+import { toast } from "sonner";
+
+interface BusinessType {
+  id: number;
+  name: string;
+  created_at?: string;
+  updated_at?: string;
+}
 
 export default function RegisterPage() {
   const [isFunder, setIsFunder] = useState(false);
@@ -16,28 +25,147 @@ export default function RegisterPage() {
     email: "",
     password: "",
     confirmPassword: "",
-    userType: "borrower", // default to borrower
+    businessName: "",
+    businessType: "",
+    institution: "",
+    investorType: "",
   });
+  const [errors, setErrors] = useState<Record<string, string[]>>({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [generalError, setGeneralError] = useState("");
+  const [businessTypes, setBusinessTypes] = useState<BusinessType[]>([]);
+  const [loadingBusinessTypes, setLoadingBusinessTypes] = useState(false);
+  const [businessTypesError, setBusinessTypesError] = useState("");
 
   const router = useRouter();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Fetch business types on component mount
+  useEffect(() => {
+    const fetchBusinessTypes = async () => {
+      setLoadingBusinessTypes(true);
+      setBusinessTypesError("");
+      try {
+        const response = await apiGet("/business-types");
+        const data = await response.json();
+        
+        if (response.ok) {
+          // Handle the response format from backend
+          if (data.status === "success" && data.data && Array.isArray(data.data)) {
+            setBusinessTypes(data.data);
+          } else if (Array.isArray(data)) {
+            // Fallback for direct array response
+            setBusinessTypes(data);
+          } else {
+            console.warn("Unexpected business types data format:", data);
+            setBusinessTypesError("Failed to load business types. Please try again later.");
+          }
+        } else {
+          console.error("Failed to fetch business types. Status:", response.status);
+          setBusinessTypesError(`Failed to load business types (Error: ${response.status})`);
+        }
+      } catch (error) {
+        console.error("Error fetching business types:", error);
+        setBusinessTypesError("Unable to connect to the server. Please check your connection.");
+      } finally {
+        setLoadingBusinessTypes(false);
+      }
+    };
+
+    fetchBusinessTypes();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle registration logic based on userType
-    console.log("Registering as:", isFunder ? "funder" : "borrower", formData);
-    if (isFunder) {
-      router.push("/funder/onboarding");
-    } else {
-      router.push("/submit-loan");
+    setErrors({});
+    setGeneralError("");
+    setIsLoading(true);
+
+    try {
+      // Prepare data according to API format
+      const registrationData: any = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        password: formData.password,
+        password_confirmation: formData.confirmPassword,
+        userType: isFunder ? "funder" : "borrower",
+      };
+
+      // Add borrower-specific fields
+      if (!isFunder) {
+        registrationData.businessName = formData.businessName;
+        registrationData.businessType = formData.businessType;
+      }
+
+      // Add funder-specific fields
+      if (isFunder) {
+        registrationData.institutionName = formData.institution;
+        registrationData.investorType = formData.investorType;
+      }
+
+      const response = await apiPost("/register", registrationData);
+      const data = await response.json();
+
+      if (!response.ok) {
+        // Handle validation errors
+        if (data.errors) {
+          setErrors(data.errors);
+          toast.error("Validation Failed", {
+            description: "Please check the form for errors and try again.",
+          });
+        } else {
+          setGeneralError(data.message || "Registration failed. Please try again.");
+          toast.error("Registration Failed", {
+            description: data.message || "Registration failed. Please try again.",
+          });
+        }
+        setIsLoading(false);
+        return;
+      }
+
+      // Success - store token and user data
+      if (data.status === "success" && data.data) {
+        login(data.data.access_token, data.data.user);
+        
+        toast.success("Registration Successful!", {
+          description: `Welcome, ${data.data.user.name}! Redirecting...`,
+          duration: 3000,
+        });
+        
+        // Wait a bit before redirecting to show the toast
+        setTimeout(() => {
+          // Redirect based on user type
+          if (isFunder) {
+            router.push("/funder/onboarding");
+          } else {
+            router.push("/submit-loan");
+          }
+        }, 1000);
+      }
+    } catch (error) {
+      console.error("Registration error:", error);
+      setGeneralError("An unexpected error occurred. Please try again.");
+      toast.error("Error", {
+        description: "An unexpected error occurred. Please try again.",
+      });
+      setIsLoading(false);
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
       [name]: value,
     }));
+    // Clear error for this field when user starts typing
+    if (errors[name]) {
+      setErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
   };
 
   const handleCardClick = (funder: boolean) => {
@@ -61,6 +189,13 @@ export default function RegisterPage() {
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          {/* General Error Message */}
+          {generalError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+              <p className="text-sm font-medium">{generalError}</p>
+            </div>
+          )}
+
           {/* User Type Selection */}
           <div className="space-y-4">
             <Label className="text-base font-medium">I want to join as:</Label>
@@ -140,8 +275,11 @@ export default function RegisterPage() {
                 value={formData.firstName}
                 onChange={handleInputChange}
                 required
-                className="mt-1"
+                className={`mt-1 ${errors.firstName ? 'border-red-500' : ''}`}
               />
+              {errors.firstName && (
+                <p className="text-red-500 text-sm mt-1">{errors.firstName[0]}</p>
+              )}
             </div>
             <div>
               <Label htmlFor="lastName">Last Name*</Label>
@@ -152,8 +290,11 @@ export default function RegisterPage() {
                 value={formData.lastName}
                 onChange={handleInputChange}
                 required
-                className="mt-1"
+                className={`mt-1 ${errors.lastName ? 'border-red-500' : ''}`}
               />
+              {errors.lastName && (
+                <p className="text-red-500 text-sm mt-1">{errors.lastName[0]}</p>
+              )}
             </div>
           </div>
 
@@ -166,8 +307,11 @@ export default function RegisterPage() {
               value={formData.email}
               onChange={handleInputChange}
               required
-              className="mt-1"
+              className={`mt-1 ${errors.email ? 'border-red-500' : ''}`}
             />
+            {errors.email && (
+              <p className="text-red-500 text-sm mt-1">{errors.email[0]}</p>
+            )}
           </div>
 
           {/* Funder-specific Fields */}
@@ -180,16 +324,23 @@ export default function RegisterPage() {
                   id="institution"
                   name="institution"
                   type="text"
+                  value={formData.institution}
+                  onChange={handleInputChange}
                   placeholder="e.g., ABC Investment Fund"
-                  className="mt-1"
+                  className={`mt-1 ${errors.institutionName ? 'border-red-500' : ''}`}
                 />
+                {errors.institutionName && (
+                  <p className="text-red-500 text-sm mt-1">{errors.institutionName[0]}</p>
+                )}
               </div>
               <div>
                 <Label htmlFor="investorType">Investor Type</Label>
                 <select
                   id="investorType"
                   name="investorType"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={formData.investorType}
+                  onChange={handleInputChange}
+                  className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${errors.investorType ? 'border-red-500' : ''}`}
                 >
                   <option value="">Select investor type</option>
                   <option value="individual">Individual Investor</option>
@@ -199,6 +350,9 @@ export default function RegisterPage() {
                   <option value="fund">Investment Fund</option>
                   <option value="CDFI">CDFI</option>
                 </select>
+                {errors.investorType && (
+                  <p className="text-red-500 text-sm mt-1">{errors.investorType[0]}</p>
+                )}
               </div>
             </div>
           )}
@@ -213,25 +367,40 @@ export default function RegisterPage() {
                   id="businessName"
                   name="businessName"
                   type="text"
+                  value={formData.businessName}
+                  onChange={handleInputChange}
                   required
-                  className="mt-1"
+                  className={`mt-1 ${errors.businessName ? 'border-red-500' : ''}`}
                 />
+                {errors.businessName && (
+                  <p className="text-red-500 text-sm mt-1">{errors.businessName[0]}</p>
+                )}
               </div>
               <div>
                 <Label htmlFor="businessType">Business Type</Label>
                 <select
                   id="businessType"
                   name="businessType"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={formData.businessType}
+                  onChange={handleInputChange}
+                  disabled={loadingBusinessTypes || !!businessTypesError}
+                  className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${errors.businessType || businessTypesError ? 'border-red-500' : ''}`}
                 >
-                  <option value="">Select business type</option>
-                  <option value="sole-proprietorship">
-                    Sole Proprietorship
+                  <option value="">
+                    {loadingBusinessTypes ? "Loading..." : businessTypesError ? "Unable to load" : "Select business type"}
                   </option>
-                  <option value="partnership">Partnership</option>
-                  <option value="llc">LLC</option>
-                  <option value="corporation">Corporation</option>
+                  {businessTypes.map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.name}
+                    </option>
+                  ))}
                 </select>
+                {businessTypesError && (
+                  <p className="text-red-500 text-sm mt-1">{businessTypesError}</p>
+                )}
+                {errors.businessType && (
+                  <p className="text-red-500 text-sm mt-1">{errors.businessType[0]}</p>
+                )}
               </div>
             </div>
           )}
@@ -247,8 +416,11 @@ export default function RegisterPage() {
                 value={formData.password}
                 onChange={handleInputChange}
                 required
-                className="mt-1"
+                className={`mt-1 ${errors.password ? 'border-red-500' : ''}`}
               />
+              {errors.password && (
+                <p className="text-red-500 text-sm mt-1">{errors.password[0]}</p>
+              )}
             </div>
             <div>
               <Label htmlFor="confirmPassword">Confirm Password*</Label>
@@ -259,8 +431,11 @@ export default function RegisterPage() {
                 value={formData.confirmPassword}
                 onChange={handleInputChange}
                 required
-                className="mt-1"
+                className={`mt-1 ${errors.password_confirmation ? 'border-red-500' : ''}`}
               />
+              {errors.password_confirmation && (
+                <p className="text-red-500 text-sm mt-1">{errors.password_confirmation[0]}</p>
+              )}
             </div>
           </div>
 
@@ -288,9 +463,10 @@ export default function RegisterPage() {
           <div>
             <Button
               type="submit"
-              className="w-full bg-indigo-600 hover:bg-indigo-700"
+              disabled={isLoading}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Create {isFunder ? "Funder" : "Borrower"} Account
+              {isLoading ? "Creating Account..." : `Create ${isFunder ? "Funder" : "Borrower"} Account`}
             </Button>
           </div>
 

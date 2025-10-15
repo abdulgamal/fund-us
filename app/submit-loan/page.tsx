@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { apiGet, authPost } from "@/lib/api";
+import { toast } from "sonner";
 
 interface FormDocuments {
   license: File | null;
@@ -44,7 +47,13 @@ interface FormData {
   documents: FormDocuments;
 }
 
+interface BusinessType {
+  id: number;
+  name: string;
+}
+
 export default function LoanSubmissionPage() {
+  const router = useRouter();
   const [currentTab, setCurrentTab] = useState("personal");
   const [formData, setFormData] = useState<FormData>({
     personal: {
@@ -78,29 +87,16 @@ export default function LoanSubmissionPage() {
       ownershipProof: null,
     },
   });
+  const [businessTypes, setBusinessTypes] = useState<BusinessType[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string[]>>({});
+  const [generalError, setGeneralError] = useState("");
 
   const tabs = [
     { id: "personal", label: "Personal" },
     { id: "business", label: "Business" },
     { id: "criteria", label: "Criteria" },
     { id: "documents", label: "Documents" },
-  ];
-
-  const businessTypes = [
-    "Sole Proprietorship",
-    "Partnership",
-    "LLC",
-    "Corporation",
-    "Nonprofit",
-  ];
-
-  const industries = [
-    "Agriculture",
-    "Retail",
-    "Manufacturing",
-    "Services",
-    "Technology",
-    "Construction",
   ];
 
   const loanPurposes = [
@@ -110,6 +106,25 @@ export default function LoanSubmissionPage() {
     "Expansion",
     "Debt Refinancing",
   ];
+
+  // Fetch business types on mount
+  useEffect(() => {
+    const fetchBusinessTypes = async () => {
+      try {
+        const response = await apiGet("/business-types");
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status === "success" && data.data) {
+            setBusinessTypes(data.data);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching business types:", error);
+      }
+    };
+
+    fetchBusinessTypes();
+  }, []);
 
   const progress =
     ((tabs.findIndex((tab) => tab.id === currentTab) + 1) / tabs.length) * 100;
@@ -128,10 +143,103 @@ export default function LoanSubmissionPage() {
     }
   };
 
-  const handleSubmit = () => {
-    console.log("Form submitted:", formData);
-    // Add form submission logic here
-    alert("Loan application submitted successfully!");
+  const handleSubmit = async () => {
+    setIsLoading(true);
+    setErrors({});
+    setGeneralError("");
+
+    try {
+      // Create FormData object
+      const submitData = new FormData();
+
+      // Add personal information
+      submitData.append("first_name", formData.personal.firstName);
+      submitData.append("last_name", formData.personal.lastName);
+      submitData.append("email", formData.personal.email);
+      submitData.append("phone", formData.personal.phone);
+      submitData.append("ssn", formData.personal.ssn);
+
+      // Add business information
+      submitData.append("business_name", formData.business.name);
+      submitData.append("business_type", formData.business.type);
+      submitData.append("registration_number", formData.business.registrationNumber);
+      submitData.append("tax_id_number", formData.business.taxId);
+      submitData.append("business_address", formData.business.address);
+      submitData.append("years_in_business", formData.business.yearsInBusiness);
+      submitData.append("industry", formData.business.industry);
+
+      // Add criteria information
+      submitData.append("annual_revenue", formData.criteria.annualRevenue);
+      submitData.append("credit_score", formData.criteria.creditScore);
+      submitData.append("has_bankruptcy", formData.criteria.hasBankruptcy ? "1" : "0");
+      submitData.append("loan_amount", formData.criteria.loanAmount);
+      submitData.append("loan_purpose", formData.criteria.loanPurpose);
+
+      // Add documents (files)
+      if (formData.documents.license) {
+        submitData.append("business_license", formData.documents.license);
+      }
+      if (formData.documents.statements) {
+        submitData.append("financial_statements", formData.documents.statements);
+      }
+      if (formData.documents.taxReturns) {
+        submitData.append("tax_returns", formData.documents.taxReturns);
+      }
+      if (formData.documents.bankStatements) {
+        submitData.append("bank_statements", formData.documents.bankStatements);
+      }
+      if (formData.documents.ownershipProof) {
+        submitData.append("proof_of_business_ownership", formData.documents.ownershipProof);
+      }
+
+      // Submit with authenticated request (Content-Type will be auto-set for FormData)
+      const response = await authPost("/v1/apply-loan", submitData);
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        // Handle validation errors
+        if (data.errors) {
+          setErrors(data.errors);
+          setGeneralError("Please fix the errors below.");
+          toast.error("Validation Failed", {
+            description: "Please check the form for errors and try again.",
+          });
+        } else {
+          setGeneralError(data.message || "Failed to submit loan application. Please try again.");
+          toast.error("Submission Failed", {
+            description: data.message || "Failed to submit loan application. Please try again.",
+          });
+        }
+        setIsLoading(false);
+        return;
+      }
+
+      // Success
+      if (data.success) {
+        toast.success("Application Submitted Successfully!", {
+          description: `Your application ID is: ${data.loan_application?.application_id || ''}`,
+          duration: 5000,
+        });
+        // Wait a bit before redirecting to show the toast
+        setTimeout(() => {
+          router.push("/loans");
+        }, 1500);
+      } else {
+        setGeneralError(data.message || "Failed to submit loan application. Please try again.");
+        toast.error("Submission Failed", {
+          description: data.message || "Failed to submit loan application. Please try again.",
+        });
+        setIsLoading(false);
+      }
+    } catch (error) {
+      console.error("Error submitting loan application:", error);
+      setGeneralError("An unexpected error occurred. Please try again.");
+      toast.error("Error", {
+        description: "An unexpected error occurred. Please try again.",
+      });
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -141,6 +249,13 @@ export default function LoanSubmissionPage() {
           <h1 className="text-2xl font-bold mb-6">
             Submit Your Loan Application
           </h1>
+
+          {/* General Error Message */}
+          {generalError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+              <p className="text-sm font-medium">{generalError}</p>
+            </div>
+          )}
 
           {/* Progress Bar */}
           <div className="mb-8">
@@ -300,7 +415,7 @@ export default function LoanSubmissionPage() {
                       <Label htmlFor="businessType">Business Type*</Label>
                       <select
                         id="businessType"
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${errors.business_type ? 'border-red-500' : ''}`}
                         value={formData.business.type}
                         onChange={(e) =>
                           setFormData({
@@ -315,11 +430,14 @@ export default function LoanSubmissionPage() {
                       >
                         <option value="">Select business type</option>
                         {businessTypes.map((type) => (
-                          <option key={type} value={type}>
-                            {type}
+                          <option key={type.id} value={type.id}>
+                            {type.name}
                           </option>
                         ))}
                       </select>
+                      {errors.business_type && (
+                        <p className="text-red-500 text-sm mt-1">{errors.business_type[0]}</p>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="registrationNumber">
@@ -397,9 +515,10 @@ export default function LoanSubmissionPage() {
                     </div>
                     <div>
                       <Label htmlFor="industry">Industry*</Label>
-                      <select
+                      <Input
                         id="industry"
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        type="text"
+                        placeholder="e.g., Technology, Retail, Manufacturing"
                         value={formData.business.industry}
                         onChange={(e) =>
                           setFormData({
@@ -410,15 +529,12 @@ export default function LoanSubmissionPage() {
                             },
                           })
                         }
+                        className={errors.industry ? 'border-red-500' : ''}
                         required
-                      >
-                        <option value="">Select industry</option>
-                        {industries.map((industry) => (
-                          <option key={industry} value={industry}>
-                            {industry}
-                          </option>
-                        ))}
-                      </select>
+                      />
+                      {errors.industry && (
+                        <p className="text-red-500 text-sm mt-1">{errors.industry[0]}</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -639,18 +755,24 @@ export default function LoanSubmissionPage() {
             <Button
               variant="outline"
               onClick={handleBack}
-              disabled={currentTab === "personal"}
+              disabled={currentTab === "personal" || isLoading}
             >
               Back
             </Button>
 
             {currentTab !== "documents" ? (
-              <Button onClick={handleNext}>
+              <Button onClick={handleNext} disabled={isLoading}>
                 Next:{" "}
                 {tabs[tabs.findIndex((tab) => tab.id === currentTab) + 1].label}
               </Button>
             ) : (
-              <Button onClick={handleSubmit}>Submit Application</Button>
+              <Button 
+                onClick={handleSubmit} 
+                disabled={isLoading}
+                className="disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? "Submitting..." : "Submit Application"}
+              </Button>
             )}
           </div>
         </div>

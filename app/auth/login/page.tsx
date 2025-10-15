@@ -1,8 +1,74 @@
+'use client';
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { apiPost, login } from "@/lib/api";
+import type { LoginResponse } from "@/lib/types/api";
+import { toast } from "sonner";
 
 export default function LoginPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setIsLoading(true);
+
+    try {
+      const response = await apiPost("/login", { 
+        email, 
+        password,
+        remember: rememberMe
+      });
+
+      if (response.ok) {
+        const result: LoginResponse = await response.json();
+        
+        // Check if login was successful
+        if (result.status === "success" && result.data) {
+          // Store token and user data in Zustand store
+          login(result.data.access_token, result.data.user);
+          
+          toast.success("Login Successful!", {
+            description: `Welcome back, ${result.data.user.name}!`,
+            duration: 3000,
+          });
+          
+          setTimeout(() => {
+            router.push('/');
+          }, 500);
+        } else {
+          setError(result.message || "Login failed");
+          toast.error("Login Failed", {
+            description: result.message || "Login failed",
+          });
+        }
+      } else {
+        const errorData = await response.json();
+        setError(errorData.message || "Invalid email or password");
+        toast.error("Login Failed", {
+          description: errorData.message || "Invalid email or password",
+        });
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      setError("An error occurred. Please try again.");
+      toast.error("Error", {
+        description: "An error occurred. Please try again.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
       <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-lg shadow-md">
@@ -21,7 +87,13 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <form className="mt-8 space-y-6">
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+            {error}
+          </div>
+        )}
+
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-4">
             <div>
               <Label htmlFor="email">Email address</Label>
@@ -31,6 +103,9 @@ export default function LoginPage() {
                 type="email"
                 autoComplete="email"
                 required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={isLoading}
                 className="mt-1"
               />
             </div>
@@ -43,6 +118,9 @@ export default function LoginPage() {
                 type="password"
                 autoComplete="current-password"
                 required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={isLoading}
                 className="mt-1"
               />
             </div>
@@ -54,6 +132,9 @@ export default function LoginPage() {
                 id="remember-me"
                 name="remember-me"
                 type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                disabled={isLoading}
                 className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
               />
               <label
@@ -77,9 +158,10 @@ export default function LoginPage() {
           <div>
             <Button
               type="submit"
+              disabled={isLoading}
               className="w-full bg-indigo-600 hover:bg-indigo-700"
             >
-              Sign in
+              {isLoading ? "Signing in..." : "Sign in"}
             </Button>
           </div>
         </form>
