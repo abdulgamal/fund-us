@@ -1,77 +1,192 @@
-import {
-  CreditCard,
-  DollarSign,
-  Users,
-  TrendingUp,
-  FileText,
-} from "lucide-react";
+"use client";
+
+import { useState, useEffect } from "react";
+import { DollarSign, Users, TrendingUp, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import CommitmentCard from "@/components/funder/CommitmentCard";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { authGet } from "@/lib/api";
+import { toast } from "sonner";
+import Link from "next/link";
 
-const stats = [
-  {
-    name: "Active Commitments",
-    value: "$4.2M",
-    icon: <DollarSign className="h-6 w-6" />,
-    change: "+$1.1M",
-    changeType: "positive",
-  },
-  {
-    name: "Syndicated Deals",
-    value: "6",
-    icon: <Users className="h-6 w-6" />,
-    change: "+2",
-    changeType: "positive",
-  },
-  {
-    name: "Avg. Yield",
-    value: "9.2%",
-    icon: <TrendingUp className="h-6 w-6" />,
-    change: "+0.3%",
-    changeType: "positive",
-  },
-  {
-    name: "Upcoming Payments",
-    value: "12",
-    icon: <FileText className="h-6 w-6" />,
-    change: "+3",
-    changeType: "positive",
-  },
-];
+interface Commitment {
+  id: number;
+  syndicate_id: number;
+  user_id: number;
+  funder_id: number;
+  status: string;
+  status_reason: string;
+  pledge_amount: number;
+  created_at: string;
+  updated_at: string;
+  syndicate: {
+    id: number;
+    name: string;
+    description: string;
+    status: string;
+    amount: number;
+    rate: number;
+    term: number;
+    risk: string;
+    funding_progress: number;
+    loan_application: {
+      id: number;
+      business_name: string;
+      industry: string;
+      loan_amount: number;
+      loan_purpose: string;
+    };
+  };
+}
 
-const commitments = [
-  {
-    id: "COM-2023-458",
-    loanId: "LN-2023-1254",
-    borrower: "AgriPro Inc.",
-    amountCommitted: "$500,000",
-    totalLoanAmount: "$2,500,000",
-    interestRate: "Prime + 2.5%",
-    status: "Active",
-    fundingDate: "2023-11-10",
-    maturityDate: "2025-05-10",
-    isSyndicated: true,
-    leadArranger: "First National Bank",
-    nextPayment: "$12,450",
-    nextPaymentDate: "2023-12-15",
-  },
-  {
-    id: "COM-2023-459",
-    loanId: "LN-2023-1257",
-    borrower: "FreshHarvest Farms",
-    amountCommitted: "$750,000",
-    totalLoanAmount: "$1,200,000",
-    interestRate: "7.25% fixed",
-    status: "Active",
-    fundingDate: "2023-11-18",
-    maturityDate: "2024-08-18",
-    isSyndicated: false,
-    nextPayment: "$8,125",
-    nextPaymentDate: "2023-12-18",
-  },
-];
+interface SyndicatedDeal {
+  id: number;
+  name: string;
+  description: string;
+  status: string;
+  amount: number;
+  rate: number;
+  term: number;
+  risk: string;
+  funding_progress: number;
+  loan_application: {
+    id: number;
+    business_name: string;
+    industry: string;
+    loan_amount: number;
+    loan_purpose: string;
+  };
+}
+
+interface LoanOpportunity {
+  id: number;
+  application_id: string;
+  business_name: string;
+  industry: string;
+  loan_amount: number;
+  loan_purpose: string;
+  annual_revenue: number;
+  credit_score: number;
+  status: string;
+  syndicates: {
+    id: number;
+    name: string;
+    amount: number;
+    rate: number;
+    term: number;
+    risk: string;
+    funding_progress: number;
+  }[];
+}
+
+interface FunderPortalData {
+  active_commitments: Commitment[];
+  syndicated_deals: SyndicatedDeal[];
+  recommended_loan_opportunities: LoanOpportunity[];
+}
 
 export default function FunderDashboard() {
+  const [portalData, setPortalData] = useState<FunderPortalData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchPortalData();
+  }, []);
+
+  const fetchPortalData = async () => {
+    setIsLoading(true);
+    try {
+      const response = await authGet("/v1/funder-portal");
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setPortalData({
+          active_commitments: data.active_commitments || [],
+          syndicated_deals: data.syndicated_deals || [],
+          recommended_loan_opportunities: data.recommended_loan_opportunities || [],
+        });
+      } else {
+        toast.error("Failed to load dashboard data", {
+          description: "Please try refreshing the page.",
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching funder portal data:", error);
+      toast.error("Error", {
+        description: "Failed to load dashboard data.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const getRiskColor = (risk: string) => {
+    switch (risk.toLowerCase()) {
+      case "low":
+        return "bg-green-100 text-green-800 border-green-200";
+      case "medium":
+        return "bg-yellow-100 text-yellow-800 border-yellow-200";
+      case "high":
+        return "bg-red-100 text-red-800 border-red-200";
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-200";
+    }
+  };
+
+  const calculateTotalCommitments = () => {
+    if (!portalData) return 0;
+    return portalData.active_commitments.reduce((sum, c) => sum + c.pledge_amount, 0);
+  };
+
+  const calculateAvgYield = () => {
+    if (!portalData || portalData.active_commitments.length === 0) return 0;
+    const totalRate = portalData.active_commitments.reduce((sum, c) => sum + c.syndicate.rate, 0);
+    return (totalRate / portalData.active_commitments.length).toFixed(1);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex justify-center items-center py-20">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  const stats = [
+    {
+      name: "Active Commitments",
+      value: formatCurrency(calculateTotalCommitments()),
+      icon: <DollarSign className="h-6 w-6" />,
+      count: portalData?.active_commitments.length || 0,
+    },
+    {
+      name: "Syndicated Deals",
+      value: portalData?.syndicated_deals.length.toString() || "0",
+      icon: <Users className="h-6 w-6" />,
+      count: portalData?.syndicated_deals.length || 0,
+    },
+    {
+      name: "Avg. Yield",
+      value: `${calculateAvgYield()}%`,
+      icon: <TrendingUp className="h-6 w-6" />,
+      count: 0,
+    },
+    {
+      name: "Opportunities",
+      value: portalData?.recommended_loan_opportunities.length.toString() || "0",
+      icon: <FileText className="h-6 w-6" />,
+      count: portalData?.recommended_loan_opportunities.length || 0,
+    },
+  ];
+
   return (
     <div className="py-8 px-4">
       <div className="max-w-7xl mx-auto">
@@ -88,19 +203,10 @@ export default function FunderDashboard() {
                   </p>
                   <p className="text-2xl font-semibold mt-1">{stat.value}</p>
                 </div>
-                <div className="bg-indigo-100 p-3 rounded-full">
+                <div className="bg-indigo-100 p-3 rounded-full text-indigo-600">
                   {stat.icon}
                 </div>
               </div>
-              <p
-                className={`mt-3 text-sm ${
-                  stat.changeType === "positive"
-                    ? "text-green-600"
-                    : "text-red-600"
-                }`}
-              >
-                {stat.change} from last month
-              </p>
             </div>
           ))}
         </div>
@@ -111,53 +217,188 @@ export default function FunderDashboard() {
             <h2 className="text-lg font-semibold">
               Recommended Loan Opportunities
             </h2>
-            <Button
-              variant="ghost"
-              className="text-indigo-600 hover:text-indigo-800"
-            >
-              View All Opportunities
-            </Button>
+            <Link href="/loans">
+              <Button
+                variant="ghost"
+                className="text-indigo-600 hover:text-indigo-800"
+              >
+                View All Opportunities
+              </Button>
+            </Link>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Sample loan card - would fetch from API */}
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
-              <h3 className="font-medium mb-2">Metro Manufacturing</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Equipment Finance • $3.2M
-              </p>
-              <div className="flex justify-between text-sm mb-2">
-                <span>Rate:</span>
-                <span className="font-medium">7.9% fixed</span>
-              </div>
-              <div className="flex justify-between text-sm mb-4">
-                <span>Term:</span>
-                <span className="font-medium">36 months</span>
-              </div>
-              <Button className="w-full bg-indigo-600 hover:bg-indigo-700">
-                View Details
-              </Button>
+          {portalData && portalData.recommended_loan_opportunities.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {portalData.recommended_loan_opportunities.map((opportunity) => (
+                <div key={opportunity.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+                  <h3 className="font-medium mb-2">{opportunity.business_name}</h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    {opportunity.industry} • {formatCurrency(opportunity.loan_amount)}
+                  </p>
+                  <div className="space-y-2 mb-4">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Revenue:</span>
+                      <span className="font-medium">{formatCurrency(opportunity.annual_revenue)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Credit Score:</span>
+                      <span className="font-medium">{opportunity.credit_score}</span>
+                    </div>
+                    {opportunity.syndicates.length > 0 && (
+                      <>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Rate:</span>
+                          <span className="font-medium">{opportunity.syndicates[0].rate}%</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Term:</span>
+                          <span className="font-medium">{opportunity.syndicates[0].term} months</span>
+                        </div>
+                        <Badge className={getRiskColor(opportunity.syndicates[0].risk)}>
+                          {opportunity.syndicates[0].risk.toUpperCase()} RISK
+                        </Badge>
+                      </>
+                    )}
+                  </div>
+                  <Link href={`/loans/${opportunity.id}`}>
+                    <Button className="w-full bg-indigo-600 hover:bg-indigo-700">
+                      View Details
+                    </Button>
+                  </Link>
+                </div>
+              ))}
             </div>
-          </div>
+          ) : (
+            <p className="text-gray-500 text-center py-8">No recommended opportunities at this time.</p>
+          )}
         </div>
 
         {/* Your Commitments Section */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-6 mb-8">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-lg font-semibold">Your Current Commitments</h2>
-            <Button
-              variant="ghost"
-              className="text-indigo-600 hover:text-indigo-800"
-            >
-              View All Commitments
-            </Button>
+            <Link href="/funder/commitments">
+              <Button
+                variant="ghost"
+                className="text-indigo-600 hover:text-indigo-800"
+              >
+                View All Commitments
+              </Button>
+            </Link>
           </div>
 
-          <div className="space-y-4">
-            {commitments.map((commitment) => (
-              <CommitmentCard key={commitment.id} commitment={commitment} />
-            ))}
+          {portalData && portalData.active_commitments.length > 0 ? (
+            <div className="space-y-4">
+              {portalData.active_commitments.map((commitment) => (
+                <div
+                  key={commitment.id}
+                  className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h3 className="font-semibold text-lg">{commitment.syndicate.name}</h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {commitment.syndicate.loan_application.business_name} • {commitment.syndicate.loan_application.industry}
+                      </p>
+                    </div>
+                    <Badge className={getRiskColor(commitment.syndicate.risk)}>
+                      {commitment.syndicate.risk.toUpperCase()} RISK
+                    </Badge>
+                  </div>
+
+                  <p className="text-sm text-gray-700 mb-4">{commitment.syndicate.description}</p>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div>
+                      <p className="text-sm text-gray-600">Your Pledge</p>
+                      <p className="font-bold text-indigo-600">{formatCurrency(commitment.pledge_amount)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Total Amount</p>
+                      <p className="font-semibold">{formatCurrency(commitment.syndicate.amount)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Interest Rate</p>
+                      <p className="font-semibold">{commitment.syndicate.rate}%</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Term</p>
+                      <p className="font-semibold">{commitment.syndicate.term} months</p>
+                    </div>
+                  </div>
+
+                  <div className="mb-4">
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="text-gray-600">Funding Progress</span>
+                      <span className="font-medium">{commitment.syndicate.funding_progress}%</span>
+                    </div>
+                    <Progress value={commitment.syndicate.funding_progress} className="h-2" />
+                  </div>
+
+                  <div className="flex justify-between items-center pt-4 border-t border-gray-200">
+                    <div>
+                      <p className="text-xs text-gray-500">Status Reason</p>
+                      <p className="text-sm font-medium">{commitment.status_reason}</p>
+                    </div>
+                    <Link href={`/loans/${commitment.syndicate.loan_application.id}`}>
+                      <Button variant="outline" size="sm">
+                        View Details
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-center py-8">You have no active commitments.</p>
+          )}
+        </div>
+
+        {/* Syndicated Deals Section */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-lg font-semibold">Fully Funded Deals</h2>
           </div>
+
+          {portalData && portalData.syndicated_deals.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {portalData.syndicated_deals.map((deal) => (
+                <div
+                  key={deal.id}
+                  className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex justify-between items-start mb-3">
+                    <h3 className="font-semibold">{deal.name}</h3>
+                    <Badge className="bg-green-100 text-green-800 border-green-200">
+                      FUNDED
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-3">{deal.loan_application.business_name}</p>
+                  <p className="text-xs text-gray-500 mb-4 line-clamp-2">{deal.description}</p>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Amount:</span>
+                      <span className="font-semibold">{formatCurrency(deal.amount)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Rate:</span>
+                      <span className="font-semibold">{deal.rate}%</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Term:</span>
+                      <span className="font-semibold">{deal.term} months</span>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <Progress value={deal.funding_progress} className="h-2" />
+                    <p className="text-xs text-gray-500 mt-1 text-center">{deal.funding_progress}% Funded</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-center py-8">No syndicated deals available.</p>
+          )}
         </div>
       </div>
     </div>
