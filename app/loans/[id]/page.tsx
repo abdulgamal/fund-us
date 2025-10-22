@@ -145,7 +145,7 @@ export default function LoanDetailsPage() {
         {/* Header */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex justify-between items-start mb-4">
-            <div>
+          <div>
               <div className="flex items-center gap-3 mb-2">
                 <h1 className="text-3xl font-bold">{loanApplication.business_name}</h1>
                 <Badge className={getStatusColor(loanApplication.status)}>
@@ -161,8 +161,8 @@ export default function LoanDetailsPage() {
               <p className="text-sm text-gray-600">Loan Amount</p>
               <p className="text-2xl font-bold text-indigo-600">
                 {formatCurrency(loanApplication.loan_amount)}
-              </p>
-            </div>
+            </p>
+          </div>
           </div>
         </div>
 
@@ -317,9 +317,9 @@ export default function LoanDetailsPage() {
           <Link href="/loans">
             <Button variant="outline">Back to Loans</Button>
           </Link>
-          <Link href={`/loans/${loanApplication.id}/commit`}>
+          <Link href={`/loans/${loanApplication.application_id}/commit?application_id=${loanApplication.application_id}`}>
             <Button className="bg-indigo-600 hover:bg-indigo-700">
-              Commit Funds
+              Commits
             </Button>
           </Link>
         </div>

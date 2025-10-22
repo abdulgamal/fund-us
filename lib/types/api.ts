@@ -7,7 +7,7 @@ export interface User {
   id: number;
   name: string;
   email: string;
-  user_type: 'superadmin' | 'bank' | 'funder' | 'borrower';
+  user_type: 'superadmin' | 'admin' | 'lender' | 'borrower';
   first_name: string;
   last_name: string;
   institution_name: string | null;
