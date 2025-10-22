@@ -30,6 +30,8 @@ export function getAuthToken(): string | null {
  */
 export function clearAuthToken(): void {
   useAuthStore.getState().clearAuth();
+  // Also clear cookies
+  clearAuthCookies();
 }
 
 /**
@@ -40,10 +42,37 @@ export function isAuthenticated(): boolean {
 }
 
 /**
+ * Set authentication cookies for middleware access
+ */
+function setAuthCookies(token: string, userType?: string): void {
+  if (typeof document !== 'undefined') {
+    // Set auth token cookie (expires in 30 days)
+    document.cookie = `auth-token=${token}; path=/; max-age=${30 * 24 * 60 * 60}; SameSite=Lax`;
+    
+    // Set user type cookie if provided
+    if (userType) {
+      document.cookie = `user-type=${userType}; path=/; max-age=${30 * 24 * 60 * 60}; SameSite=Lax`;
+    }
+  }
+}
+
+/**
+ * Clear authentication cookies
+ */
+function clearAuthCookies(): void {
+  if (typeof document !== 'undefined') {
+    document.cookie = 'auth-token=; path=/; max-age=0';
+    document.cookie = 'user-type=; path=/; max-age=0';
+  }
+}
+
+/**
  * Login with token and optional user data
  */
 export function login(token: string, user?: User): void {
   useAuthStore.getState().login(token, user);
+  // Also set cookies for middleware access
+  setAuthCookies(token, user?.user_type);
 }
 
 /**
@@ -51,6 +80,8 @@ export function login(token: string, user?: User): void {
  */
 export function logout(): void {
   useAuthStore.getState().logout();
+  // Also clear cookies
+  clearAuthCookies();
 }
 
 /**

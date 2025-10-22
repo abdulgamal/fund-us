@@ -42,9 +42,21 @@ export default function LoginPage() {
             duration: 3000,
           });
           
-          setTimeout(() => {
+          // Redirect based on user type
+          if (result.data.user.user_type === "borrower") {
+            router.push('/borrower/dashboard');
+          } else if (result.data.user.user_type === "lender") {
+            router.push('/funder/dashboard');
+          } else if (result.data.user.user_type === "admin") {
+            router.push('/bank/dashboard');
+          } else if (result.data.user.user_type === "superadmin") {
+            router.push('/bank/dashboard');
+          } else {
             router.push('/');
-          }, 500);
+          }
+        
+          
+          
         } else {
           setError(result.message || "Login failed");
           toast.error("Login Failed", {

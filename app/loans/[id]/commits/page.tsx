@@ -1,47 +1,117 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { authGet, authPost, useAuthStore } from "@/lib/api";
+import { toast } from "sonner";
 
-interface PageProps {
-  params: Promise<{
-    id: string;
-  }>;
+interface Syndicate {
+  id: number;
+  name: string;
+  description: string;
+  status: string;
+  lead_funder: number | null;
+  amount: number;
+  rate: number;
+  term: number;
+  risk: string;
+  funding_progress: number;
+  loan_application_id: number;
 }
 
-export default async function CommitPage({ params }: PageProps) {
+export default function CommitPage() {
+  const params = useParams();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const id = params.id as string;
+  const syndicateId = searchParams.get("syndicate_id");
+  const user = useAuthStore((state) => state.user);
+
+  const [syndicate, setSyndicate] = useState<Syndicate | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isLeadInvestor, setIsLeadInvestor] = useState(false);
   const [commitmentAmount, setCommitmentAmount] = useState("");
-  const { id } = await params;
+  const [fundingType, setFundingType] = useState("syndicate");
+  const [notes, setNotes] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const loan = {
-    id: id,
-    borrower: "FreshHarvest Farms",
-    loanType: "Seasonal Working Capital",
-    amount: "$1,200,000",
-    remainingAmount: "$1,200,000",
-    interestRate: "7.25% fixed",
-    term: "9 months",
-    minCommitment: "$100,000",
-    isNew: true, // This loan is new and unfunded
-    riskRating: "BB",
+  useEffect(() => {
+    if (syndicateId) {
+      fetchSyndicate();
+    } else {
+      toast.error("No Syndicate ID", {
+        description: "Syndicate ID is required.",
+      });
+      router.push("/loans");
+    }
+  }, [syndicateId]);
+
+  const fetchSyndicate = async () => {
+    setIsLoading(true);
+    try {
+      const response = await authGet(`/v1/syndicate/${syndicateId}`);
+      const data = await response.json();
+
+      if (response.ok) {
+        setSyndicate(data);
+      } else {
+        toast.error("Failed to load syndicate", {
+          description: "The syndicate could not be found.",
+        });
+        router.push("/loans");
+      }
+    } catch (error) {
+      console.error("Error fetching syndicate:", error);
+      toast.error("Error", {
+        description: "Failed to load syndicate details.",
+      });
+      router.push("/loans");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const isNewLoan =
-    loan.isNew &&
-    parseInt(loan.remainingAmount.replace(/\D/g, "")) ===
-      parseInt(loan.amount.replace(/\D/g, ""));
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const getRemainingAmount = () => {
+    if (!syndicate) return 0;
+    return syndicate.amount * (1 - syndicate.funding_progress / 100);
+  };
+
+  const getRiskColor = (risk: string) => {
+    switch (risk.toLowerCase()) {
+      case "low":
+        return "bg-green-100 text-green-800 border-green-200";
+      case "medium":
+        return "bg-yellow-100 text-yellow-800 border-yellow-200";
+      case "high":
+        return "bg-red-100 text-red-800 border-red-200";
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-200";
+    }
+  };
+
+  const isNewLoan = syndicate && !syndicate.lead_funder;
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setCommitmentAmount(value);
 
     // Auto-select lead investor if committing full amount
-    if (value === loan.remainingAmount.replace(/\D/g, "")) {
+    const remaining = getRemainingAmount();
+    if (value && parseFloat(value) >= remaining) {
       setIsLeadInvestor(true);
     }
   };
@@ -50,57 +120,146 @@ export default async function CommitPage({ params }: PageProps) {
     setIsLeadInvestor(checked);
     // If becoming lead investor, suggest full amount
     if (checked && !commitmentAmount) {
-      setCommitmentAmount(loan.remainingAmount.replace(/\D/g, ""));
+      const remaining = getRemainingAmount();
+      setCommitmentAmount(remaining.toString());
     }
   };
+
+  const handleSubmit = async () => {
+    if (!commitmentAmount || parseFloat(commitmentAmount) <= 0) {
+      toast.error("Invalid Amount", {
+        description: "Please enter a valid commitment amount.",
+      });
+      return;
+    }
+
+    if (!user) {
+      toast.error("Authentication Required", {
+        description: "Please log in to submit a commitment.",
+      });
+      return;
+    }
+
+    if (!syndicate) {
+      toast.error("Syndicate Not Found", {
+        description: "Unable to load syndicate details.",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        syndicate_id: parseInt(syndicateId || "0"),
+        user_id: user.id,
+        amount: parseFloat(commitmentAmount),
+        rate: syndicate.rate,
+        term: `${syndicate.term} months`,
+        status: "pending",
+        notes: notes || "",
+      };
+
+      const response = await authPost("/v1/syndicate-bids/submit", payload);
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        toast.success("Commitment Submitted!", {
+          description: data.message || "Your funding commitment has been submitted successfully.",
+          duration: 3000,
+        });
+        
+        setTimeout(() => {
+          router.push("/funder/commitments");
+        }, 1500);
+      } else {
+        throw new Error(data.message || "Failed to submit commitment");
+      }
+    } catch (error) {
+      console.error("Error submitting commitment:", error);
+      toast.error("Submission Failed", {
+        description: error instanceof Error ? error.message : "Failed to submit your commitment. Please try again.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex justify-center items-center py-20">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  if (!syndicate) {
+    return null;
+  }
+
+  const remainingAmount = getRemainingAmount();
 
   return (
     <div className="py-12 px-4">
       <div className="max-w-2xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold">
-            Commit Funds to Loan #{loan.id}
-          </h1>
-          <p className="text-gray-600">
-            {loan.borrower} - {loan.loanType}
-          </p>
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold">
+              {isNewLoan ? "Be the First to Fund" : "Join Syndicate"}
+            </h1>
+            <Badge className={getRiskColor(syndicate.risk)}>
+              {syndicate.risk.toUpperCase()} RISK
+            </Badge>
+          </div>
+          <p className="text-gray-600 mt-2">{syndicate.name}</p>
           {isNewLoan && (
-            <div className="mt-2 bg-blue-100 border border-blue-200 text-blue-700 px-4 py-2 rounded-md">
-              🚀 New Opportunity - Be the first to fund this loan!
+            <div className="mt-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md">
+              <p className="font-semibold">🚀 Lead Investor Opportunity!</p>
+              <p className="text-sm mt-1">
+                Be the first to fund this syndicate and become the lead investor with priority benefits.
+              </p>
             </div>
           )}
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-          <h2 className="text-lg font-semibold mb-4">Loan Summary</h2>
+          <h2 className="text-lg font-semibold mb-4">Syndicate Overview</h2>
+          <p className="text-sm text-gray-700 mb-6">{syndicate.description}</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div>
-              <Label>Borrower</Label>
-              <p className="font-medium">{loan.borrower}</p>
+              <Label>Syndicate Name</Label>
+              <p className="font-medium">{syndicate.name}</p>
             </div>
             <div>
-              <Label>Loan Type</Label>
-              <p className="font-medium">{loan.loanType}</p>
+              <Label>Status</Label>
+              <p className="font-medium capitalize">{syndicate.status}</p>
             </div>
             <div>
-              <Label>Total Amount</Label>
-              <p className="font-medium">{loan.amount}</p>
+              <Label>Total Syndicate Amount</Label>
+              <p className="font-medium">{formatCurrency(syndicate.amount)}</p>
             </div>
             <div>
               <Label>Remaining for Funding</Label>
-              <p className="font-medium">{loan.remainingAmount}</p>
+              <p className="font-medium text-indigo-600">{formatCurrency(remainingAmount)}</p>
             </div>
             <div>
               <Label>Interest Rate</Label>
-              <p className="font-medium">{loan.interestRate}</p>
+              <p className="font-medium">{syndicate.rate}%</p>
             </div>
             <div>
               <Label>Term</Label>
-              <p className="font-medium">{loan.term}</p>
+              <p className="font-medium">{syndicate.term} months</p>
             </div>
-            <div>
-              <Label>Risk Rating</Label>
-              <p className="font-medium">{loan.riskRating}</p>
+          </div>
+          <div className="pt-4 border-t border-gray-200">
+            <div className="flex justify-between text-sm mb-2">
+              <span className="text-gray-600">Funding Progress</span>
+              <span className="font-semibold">{syndicate.funding_progress}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-indigo-600 h-2 rounded-full transition-all"
+                style={{ width: `${syndicate.funding_progress}%` }}
+              ></div>
             </div>
           </div>
         </div>
@@ -117,13 +276,13 @@ export default async function CommitPage({ params }: PageProps) {
                 placeholder="Enter amount"
                 value={commitmentAmount}
                 onChange={handleAmountChange}
-                min={loan.minCommitment.replace(/\D/g, "")}
-                max={loan.remainingAmount.replace(/\D/g, "")}
+                min={10000}
+                max={remainingAmount}
                 className="mt-1"
                 required
               />
               <p className="text-sm text-gray-500 mt-2">
-                Minimum commitment: {loan.minCommitment}
+                Maximum available: {formatCurrency(remainingAmount)}
               </p>
             </div>
 
@@ -178,13 +337,7 @@ export default async function CommitPage({ params }: PageProps) {
                     </h4>
                     <ul className="text-sm text-yellow-700 space-y-1">
                       <li>
-                        • Minimum commitment: $
-                        {Math.max(
-                          parseInt(loan.minCommitment.replace(/\D/g, "")),
-                          Math.ceil(
-                            parseInt(loan.amount.replace(/\D/g, "")) * 0.25
-                          )
-                        ).toLocaleString()}
+                        • Minimum commitment: {formatCurrency(Math.max(10000, Math.ceil(syndicate.amount * 0.25)))}
                       </li>
                       <li>• Must complete enhanced KYC process</li>
                       <li>• Agreement to lead investor terms</li>
@@ -196,17 +349,17 @@ export default async function CommitPage({ params }: PageProps) {
 
             <div>
               <Label>Funding Type</Label>
-              <RadioGroup defaultValue="syndicate" className="mt-2 space-y-2">
+              <RadioGroup value={fundingType} onValueChange={setFundingType} className="mt-2 space-y-2">
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="syndicate" id="syndicate" />
                   <Label htmlFor="syndicate" className="cursor-pointer">
-                    Join Syndicate {isLeadInvestor && "(as Lead)"}
+                    {isLeadInvestor ? "Join as Lead Investor" : "Join Syndicate"}
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="full" id="full" />
                   <Label htmlFor="full" className="cursor-pointer">
-                    Fund Entire Remaining Amount
+                    Fund Entire Remaining Amount ({formatCurrency(remainingAmount)})
                   </Label>
                 </div>
               </RadioGroup>
@@ -217,6 +370,8 @@ export default async function CommitPage({ params }: PageProps) {
               <textarea
                 id="notes"
                 rows={3}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
                 className="w-full border border-gray-300 rounded-md p-2 mt-1 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="Add any special instructions or conditions"
               />
@@ -229,47 +384,40 @@ export default async function CommitPage({ params }: PageProps) {
           <div className="space-y-4 mb-6">
             <div className="flex justify-between">
               <span className="text-gray-600">Commitment Amount</span>
-              <span className="font-medium">
-                $
-                {commitmentAmount
-                  ? parseInt(commitmentAmount).toLocaleString()
-                  : "0"}
+              <span className="font-medium text-indigo-600 text-lg">
+                {commitmentAmount ? formatCurrency(parseFloat(commitmentAmount)) : "$0"}
               </span>
             </div>
 
             {isLeadInvestor && (
               <div className="flex justify-between text-green-600">
-                <span>Lead Arrangement Fee</span>
+                <span>Lead Arrangement Fee (0.5%)</span>
                 <span className="font-medium">
-                  +$
-                  {commitmentAmount
-                    ? Math.floor(
-                        parseInt(commitmentAmount) * 0.005
-                      ).toLocaleString()
-                    : "0"}
+                  +{commitmentAmount ? formatCurrency(parseFloat(commitmentAmount) * 0.005) : "$0"}
                 </span>
               </div>
             )}
 
             <div className="flex justify-between">
               <span className="text-gray-600">Estimated Annual Yield</span>
-              <span className="font-medium">{loan.interestRate}</span>
+              <span className="font-medium">{syndicate.rate}%</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Term</span>
-              <span className="font-medium">{loan.term}</span>
+              <span className="font-medium">{syndicate.term} months</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Risk Level</span>
+              <span className="font-medium capitalize">{syndicate.risk}</span>
             </div>
             {isLeadInvestor && (
-              <div className="border-t pt-2">
-                <div className="flex justify-between font-semibold">
-                  <span>Total Potential Earnings</span>
+              <div className="border-t pt-4 mt-4">
+                <div className="flex justify-between font-semibold text-lg">
+                  <span>Total with Lead Fee</span>
                   <span className="text-green-600">
-                    $
                     {commitmentAmount
-                      ? Math.floor(
-                          parseInt(commitmentAmount) * 1.005
-                        ).toLocaleString()
-                      : "0"}
+                      ? formatCurrency(parseFloat(commitmentAmount) * 1.005)
+                      : "$0"}
                   </span>
                 </div>
               </div>
@@ -277,11 +425,23 @@ export default async function CommitPage({ params }: PageProps) {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3">
-            <Button variant="outline" className="border-gray-300">
-              Download Term Sheet
+            <Button
+              variant="outline"
+              className="border-gray-300"
+              onClick={() => router.push(`/loans/${id}`)}
+            >
+              Back to Details
             </Button>
-            <Button className="bg-indigo-600 hover:bg-indigo-700 flex-1">
-              {isLeadInvestor ? "Submit as Lead Investor" : "Submit Commitment"}
+            <Button
+              className="bg-indigo-600 hover:bg-indigo-700 flex-1"
+              onClick={handleSubmit}
+              disabled={isSubmitting || !commitmentAmount || parseFloat(commitmentAmount) <= 0}
+            >
+              {isSubmitting
+                ? "Submitting..."
+                : isLeadInvestor
+                ? "Submit as Lead Investor"
+                : "Submit Commitment"}
             </Button>
           </div>
         </div>

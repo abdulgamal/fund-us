@@ -7,6 +7,23 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
+interface Syndicate {
+  id: number;
+  name: string;
+  description: string;
+  status: string;
+  amount: number;
+  rate: number;
+  term: number;
+  risk: string;
+  funding_progress: number;
+  lead_funder: {
+    id: number;
+    name: string;
+    institution_name: string | null;
+  };
+}
+
 interface LoanApplication {
   id: number;
   application_id: string;
@@ -22,6 +39,7 @@ interface LoanApplication {
   status: string;
   created_at: string;
   years_in_business: number;
+  syndicates: Syndicate[];
 }
 
 interface PaginationData {
@@ -164,14 +182,29 @@ export default function LoansPage() {
     return status.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
   };
 
+  const getRiskColor = (risk: string) => {
+    switch (risk.toLowerCase()) {
+      case "low":
+        return "bg-green-100 text-green-800 border-green-200";
+      case "medium":
+        return "bg-yellow-100 text-yellow-800 border-yellow-200";
+      case "high":
+        return "bg-red-100 text-red-800 border-red-200";
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-200";
+    }
+  };
+
   return (
     <div className="py-12 px-4">
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold mb-2">Loan Applications</h1>
+            <h1 className="text-3xl font-bold mb-2">Investment Opportunities</h1>
             <p className="text-gray-600">
-              {pagination ? `${pagination.total} ${pagination.total === 1 ? 'application' : 'applications'} found` : "Loading..."}
+              {pagination && loanApplications ? 
+                `${loanApplications.filter((loan) => loan.syndicates && loan.syndicates.length > 0).length} syndicated ${loanApplications.filter((loan) => loan.syndicates && loan.syndicates.length > 0).length === 1 ? 'opportunity' : 'opportunities'} available` 
+                : "Loading..."}
             </p>
           </div>
           <Link href="/submit-loan">
@@ -185,22 +218,25 @@ export default function LoansPage() {
           <div className="flex justify-center items-center py-20">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
           </div>
-        ) : loanApplications.length === 0 ? (
+        ) : loanApplications.filter((loan) => loan.syndicates && loan.syndicates.length > 0).length === 0 ? (
           <div className="text-center py-20 bg-white rounded-lg shadow-sm border border-gray-200">
-            <p className="text-gray-500 text-lg mb-4">No loan applications found</p>
+            <p className="text-gray-500 text-lg mb-4">No funding opportunities available</p>
+            <p className="text-gray-400 text-sm mb-6">Check back later for new syndicated loan opportunities</p>
             <Link href="/submit-loan">
               <Button className="bg-indigo-600 hover:bg-indigo-700">
-                Submit Your First Application
+                Submit a Loan Application
               </Button>
             </Link>
           </div>
         ) : (
           <>
             <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 transition-opacity duration-300 ${isPageChanging ? 'opacity-50' : 'opacity-100'}`}>
-              {loanApplications.map((loan) => (
+              {loanApplications
+                .filter((loan) => loan.syndicates && loan.syndicates.length > 0)
+                .map((loan) => (
                 <div
                   key={loan.id}
-                  className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
+                  className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow flex flex-col"
                 >
                   <div className="flex justify-between items-start mb-4">
                     <div>
@@ -247,23 +283,74 @@ export default function LoansPage() {
                     </div>
                   </div>
 
-                  <div className="pt-4 border-t border-gray-200">
-                    <p className="text-sm text-gray-600 mb-2">Purpose:</p>
-                    <p className="text-sm text-gray-900 line-clamp-2">
-                      {loan.loan_purpose}
-                    </p>
+                  {/* Syndicate Information */}
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="flex justify-between items-center mb-2">
+                      <p className="text-xs font-semibold text-gray-700">
+                        {loan.syndicates[0].name}
+                      </p>
+                      <Badge className={getRiskColor(loan.syndicates[0].risk)}>
+                        {loan.syndicates[0].risk.toUpperCase()}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+                      <div>
+                        <span className="text-gray-600">Rate:</span>
+                        <span className="font-semibold ml-1">{loan.syndicates[0].rate}%</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Term:</span>
+                        <span className="font-semibold ml-1">{loan.syndicates[0].term} mo</span>
+                      </div>
+                    </div>
+                    <div className="mb-2">
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-gray-600">Funding Progress</span>
+                        <span className="font-semibold">{loan.syndicates[0].funding_progress}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-indigo-600 h-2 rounded-full transition-all"
+                          style={{ width: `${loan.syndicates[0].funding_progress}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                    {loan.syndicates[0].lead_funder ? (
+                      <p className="text-xs text-gray-600">
+                        Led by: <span className="font-medium">{loan.syndicates[0].lead_funder.institution_name || loan.syndicates[0].lead_funder.name}</span>
+                      </p>
+                    ) : (
+                      <p className="text-xs text-green-600 font-medium">
+                        🚀 Be the first to lead this syndicate!
+                      </p>
+                    )}
                   </div>
 
-                  <div className="mt-4">
+                  <div className="mt-auto pt-4 space-y-3">
                     <Link href={`/loans/${loan.application_id}`}>
                       <Button variant="outline" className="w-full">
                         View Details
                       </Button>
                     </Link>
+                    
+                    {/* Funding Buttons */}
+                    {loan.syndicates[0].lead_funder ? (
+                      <Link href={`/loans/${loan.id}/commits?syndicate_id=${loan.syndicates[0].id}`}>
+                        <Button className="w-full mt-3 bg-indigo-600 hover:bg-indigo-700">
+                          Join Syndicate
+                        </Button>
+                      </Link>
+                    ) : (
+                      <Link href={`/loans/${loan.id}/commits?syndicate_id=${loan.syndicates[0].id}`}>
+                        <Button className="w-full mt-3 bg-green-600 hover:bg-green-700">
+                          Be the First to Fund
+                        </Button>
+                      </Link>
+                    )}
                   </div>
                 </div>
-              ))}
-            </div>
+          ))}
+        </div>
 
             {/* Enhanced Pagination */}
             {pagination && pagination.last_page > 1 && (
@@ -349,7 +436,7 @@ export default function LoansPage() {
 
                 {/* Page Info */}
                 <div className="text-center mt-4 text-sm text-gray-600">
-                  Showing {pagination.from} to {pagination.to} of {pagination.total} results
+                  Showing {loanApplications.filter((loan) => loan.syndicates && loan.syndicates.length > 0).length} syndicated opportunities on this page
                 </div>
               </div>
             )}

@@ -16,6 +16,22 @@ export function Header() {
     router.push("/");
   };
 
+  const getDashboardLink = () => {
+    if (!user) return "/";
+    
+    switch (user.user_type) {
+      case "borrower":
+        return "/borrower/dashboard";
+      case "lender":
+        return "/funder/dashboard";
+      case "admin":
+      case "superadmin":
+        return "/bank/dashboard";
+      default:
+        return "/";
+    }
+  };
+
   return (
     <header className="bg-white shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -31,18 +47,51 @@ export function Header() {
               />
             </Link>
             <nav className="hidden md:ml-10 md:flex space-x-8">
-              <Link
-                href="/loans"
-                className="text-gray-700 hover:text-indigo-600"
-              >
-                Loan Marketplace
-              </Link>
-              <Link
-                href="/funder/dashboard"
-                className="text-gray-700 hover:text-indigo-600"
-              >
-                Funder Portal
-              </Link>
+              {/* Show different links based on user type */}
+              {isAuthenticated && user?.user_type === "lender" && (
+                <Link
+                  href="/loans"
+                  className="text-gray-700 hover:text-indigo-600"
+                >
+                  Loan Marketplace
+                </Link>
+              )}
+              
+              {isAuthenticated && user?.user_type === "borrower" && (
+                <Link
+                  href="/loans"
+                  className="text-gray-700 hover:text-indigo-600"
+                >
+                  My Loans
+                </Link>
+              )}
+
+              {isAuthenticated && (
+                <Link
+                  href={getDashboardLink()}
+                  className="text-gray-700 hover:text-indigo-600"
+                >
+                  Dashboard
+                </Link>
+              )}
+
+              {!isAuthenticated && (
+                <>
+                  <Link
+                    href="/loans"
+                    className="text-gray-700 hover:text-indigo-600"
+                  >
+                    Loan Marketplace
+                  </Link>
+                  <Link
+                    href="/funder/dashboard"
+                    className="text-gray-700 hover:text-indigo-600"
+                  >
+                    Funder Portal
+                  </Link>
+                </>
+              )}
+              
               <Link
                 href="https://real-estate-wine-nine.vercel.app/"
                 target="_blank"
@@ -132,18 +181,51 @@ export function Header() {
       {/* Mobile menu */}
       <div className={`md:hidden ${isMenuOpen ? "block" : "hidden"}`}>
         <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-          <Link
-            href="/loans"
-            className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50"
-          >
-            Loan Marketplace
-          </Link>
-          <Link
-            href="/funder/dashboard"
-            className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50"
-          >
-            Funder Portal
-          </Link>
+          {/* Show different links based on user type */}
+          {isAuthenticated && user?.user_type === "lender" && (
+            <Link
+              href="/loans"
+              className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50"
+            >
+              Loan Marketplace
+            </Link>
+          )}
+          
+          {isAuthenticated && user?.user_type === "borrower" && (
+            <Link
+              href="/loans"
+              className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50"
+            >
+              My Loans
+            </Link>
+          )}
+
+          {isAuthenticated && (
+            <Link
+              href={getDashboardLink()}
+              className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50"
+            >
+              Dashboard
+            </Link>
+          )}
+
+          {!isAuthenticated && (
+            <>
+              <Link
+                href="/loans"
+                className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50"
+              >
+                Loan Marketplace
+              </Link>
+              <Link
+                href="/funder/dashboard"
+                className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50"
+              >
+                Funder Portal
+              </Link>
+            </>
+          )}
+          
           <Link
             href="https://real-estate-wine-nine.vercel.app/"
             target="_blank"
