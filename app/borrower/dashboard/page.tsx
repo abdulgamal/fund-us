@@ -418,10 +418,12 @@ export default function BorrowerDashboard() {
       let foundApplication: LoanApplication | undefined;
       
       applications.forEach(app => {
-        const syndicate = app.syndicates.find(s => s.id === bid.syndicate_id);
-        if (syndicate) {
-          foundSyndicate = syndicate;
-          foundApplication = app;
+        if (app.syndicates && Array.isArray(app.syndicates)) {
+          const syndicate = app.syndicates.find(s => s.id === bid.syndicate_id);
+          if (syndicate) {
+            foundSyndicate = syndicate;
+            foundApplication = app;
+          }
         }
       });
       

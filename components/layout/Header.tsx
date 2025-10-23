@@ -83,12 +83,6 @@ export function Header() {
                   >
                     Loan Marketplace
                   </Link>
-                  <Link
-                    href="/funder/dashboard"
-                    className="text-gray-700 hover:text-indigo-600"
-                  >
-                    Funder Portal
-                  </Link>
                 </>
               )}
               
@@ -217,12 +211,7 @@ export function Header() {
               >
                 Loan Marketplace
               </Link>
-              <Link
-                href="/funder/dashboard"
-                className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50"
-              >
-                Funder Portal
-              </Link>
+              
             </>
           )}
           
