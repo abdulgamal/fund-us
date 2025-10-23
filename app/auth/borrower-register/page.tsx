@@ -10,65 +10,65 @@ import { useRouter } from "next/navigation";
 import { apiPost, apiGet, login } from "@/lib/api";
 import { toast } from "sonner";
 
-interface InvestorType {
+interface BusinessType {
   id: number;
   name: string;
   created_at?: string;
   updated_at?: string;
 }
 
-export default function FunderRegisterPage() {
+export default function BorrowerRegisterPage() {
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
     email: "",
     password: "",
     confirmPassword: "",
-    institution: "",
-    investorType: "",
+    businessName: "",
+    businessType: "",
   });
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [generalError, setGeneralError] = useState("");
-  const [investorTypes, setInvestorTypes] = useState<InvestorType[]>([]);
-  const [loadingInvestorTypes, setLoadingInvestorTypes] = useState(false);
-  const [investorTypesError, setInvestorTypesError] = useState("");
+  const [businessTypes, setBusinessTypes] = useState<BusinessType[]>([]);
+  const [loadingBusinessTypes, setLoadingBusinessTypes] = useState(false);
+  const [businessTypesError, setBusinessTypesError] = useState("");
 
   const router = useRouter();
 
-  // Fetch investor types on component mount
+  // Fetch business types on component mount
   useEffect(() => {
-    const fetchInvestorTypes = async () => {
-      setLoadingInvestorTypes(true);
-      setInvestorTypesError("");
+    const fetchBusinessTypes = async () => {
+      setLoadingBusinessTypes(true);
+      setBusinessTypesError("");
       try {
-        const response = await apiGet("/investor-types");
+        const response = await apiGet("/business-types");
         const data = await response.json();
         
         if (response.ok) {
           // Handle the response format from backend
           if (data.status === "success" && data.data && Array.isArray(data.data)) {
-            setInvestorTypes(data.data);
+            setBusinessTypes(data.data);
           } else if (Array.isArray(data)) {
             // Fallback for direct array response
-            setInvestorTypes(data);
+            setBusinessTypes(data);
           } else {
-            console.warn("Unexpected investor types data format:", data);
-            setInvestorTypesError("Failed to load investor types. Please try again later.");
+            console.warn("Unexpected business types data format:", data);
+            setBusinessTypesError("Failed to load business types. Please try again later.");
           }
         } else {
-          console.error("Failed to fetch investor types. Status:", response.status);
-          setInvestorTypesError(`Failed to load investor types (Error: ${response.status})`);
+          console.error("Failed to fetch business types. Status:", response.status);
+          setBusinessTypesError(`Failed to load business types (Error: ${response.status})`);
         }
       } catch (error) {
-        console.error("Error fetching investor types:", error);
-        setInvestorTypesError("Unable to connect to the server. Please check your connection.");
+        console.error("Error fetching business types:", error);
+        setBusinessTypesError("Unable to connect to the server. Please check your connection.");
       } finally {
-        setLoadingInvestorTypes(false);
+        setLoadingBusinessTypes(false);
       }
     };
 
-    fetchInvestorTypes();
+    fetchBusinessTypes();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -85,9 +85,9 @@ export default function FunderRegisterPage() {
         email: formData.email,
         password: formData.password,
         password_confirmation: formData.confirmPassword,
-        userType: "lender",
-        institution: formData.institution,
-        investorType: formData.investorType,
+        userType: "borrower",
+        businessName: formData.businessName,
+        businessType: formData.businessType,
       };
 
       const response = await apiPost("/register", registrationData);
@@ -123,7 +123,7 @@ export default function FunderRegisterPage() {
         
         // Wait a bit before redirecting to show the toast
         setTimeout(() => {
-          router.push("/funder/onboarding");
+          router.push("/submit-loan");
         }, 1000);
       }
     } catch (error) {
@@ -157,9 +157,9 @@ export default function FunderRegisterPage() {
       <div className="max-w-4xl mx-auto">
         <div className="bg-white rounded-xl shadow-lg p-8 md:p-12">
           <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-gray-900">Create Funder Account</h2>
+            <h2 className="text-3xl font-bold text-gray-900">Create Borrower Account</h2>
             <p className="mt-2 text-sm text-gray-600">
-              Join our lending marketplace as a funder
+              Join our lending marketplace as a borrower
             </p>
           </div>
 
@@ -175,21 +175,6 @@ export default function FunderRegisterPage() {
             <div className="space-y-4">
               <Label className="text-base font-medium">Account Type:</Label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Link href="/auth/borrower-register" className="block">
-                  <div className="border-2 rounded-lg p-4 border-gray-300 bg-white text-gray-700 hover:border-gray-400 transition-all cursor-pointer">
-                    <div className="flex items-center">
-                      <Checkbox
-                        checked={false}
-                        className="mr-3"
-                      />
-                      <div>
-                        <p className="font-medium">Borrower</p>
-                        <p className="text-sm mt-1">Submit loan requests</p>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-
                 <div className="border-2 rounded-lg p-4 bg-indigo-50 border-indigo-600 text-indigo-700">
                   <div className="flex items-center">
                     <Checkbox
@@ -197,19 +182,34 @@ export default function FunderRegisterPage() {
                       className="mr-3"
                     />
                     <div>
-                      <p className="font-medium">Funder</p>
-                      <p className="text-sm mt-1">Invest in loans</p>
+                      <p className="font-medium">Borrower</p>
+                      <p className="text-sm mt-1">Submit loan requests</p>
                     </div>
                   </div>
                 </div>
+
+                <Link href="/auth/funder-register" className="block">
+                  <div className="border-2 rounded-lg p-4 border-gray-300 bg-white text-gray-700 hover:border-gray-400 transition-all cursor-pointer">
+                    <div className="flex items-center">
+                      <Checkbox
+                        checked={false}
+                        className="mr-3"
+                      />
+                      <div>
+                        <p className="font-medium">Funder</p>
+                        <p className="text-sm mt-1">Invest in loans</p>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
               </div>
             </div>
 
-            {/* Funder Information */}
+            {/* Borrower Information */}
             <div className="pt-4 border-t border-gray-200">
-              <h3 className="text-lg font-medium">Funder Information</h3>
+              <h3 className="text-lg font-medium">Borrower Information</h3>
               <p className="text-sm text-gray-600 mt-1">
-                Complete your funder profile to start investing
+                Tell us about your business to submit loan requests
               </p>
             </div>
 
@@ -263,49 +263,49 @@ export default function FunderRegisterPage() {
               )}
             </div>
 
-            {/* Funder-specific Fields */}
-            <div className="space-y-4 bg-blue-50 p-6 rounded-lg border border-blue-200">
-              <h4 className="font-medium text-blue-900">Funder Details</h4>
+            {/* Business Details */}
+            <div className="space-y-4 bg-green-50 p-6 rounded-lg border border-green-200">
+              <h4 className="font-medium text-green-900">Business Details</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="institution">Institution Name</Label>
+                  <Label htmlFor="businessName">Business Name*</Label>
                   <Input
-                    id="institution"
-                    name="institution"
+                    id="businessName"
+                    name="businessName"
                     type="text"
-                    value={formData.institution}
+                    value={formData.businessName}
                     onChange={handleInputChange}
-                    placeholder="e.g., ABC Investment Fund"
-                    className={`mt-1 ${errors.institution ? 'border-red-500' : ''}`}
+                    required
+                    className={`mt-1 ${errors.businessName ? 'border-red-500' : ''}`}
                   />
-                  {errors.institution && (
-                    <p className="text-red-500 text-sm mt-1">{errors.institution[0]}</p>
+                  {errors.businessName && (
+                    <p className="text-red-500 text-sm mt-1">{errors.businessName[0]}</p>
                   )}
                 </div>
                 <div>
-                  <Label htmlFor="investorType">Investor Type</Label>
+                  <Label htmlFor="businessType">Business Type</Label>
                   <select
-                    id="investorType"
-                    name="investorType"
-                    value={formData.investorType}
+                    id="businessType"
+                    name="businessType"
+                    value={formData.businessType}
                     onChange={handleInputChange}
-                    disabled={loadingInvestorTypes || !!investorTypesError}
-                    className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${errors.investorType || investorTypesError ? 'border-red-500' : ''}`}
+                    disabled={loadingBusinessTypes || !!businessTypesError}
+                    className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${errors.businessType || businessTypesError ? 'border-red-500' : ''}`}
                   >
                     <option value="">
-                      {loadingInvestorTypes ? "Loading..." : investorTypesError ? "Unable to load" : "Select investor type"}
+                      {loadingBusinessTypes ? "Loading..." : businessTypesError ? "Unable to load" : "Select business type"}
                     </option>
-                    {investorTypes.map((type) => (
+                    {businessTypes.map((type) => (
                       <option key={type.id} value={type.id}>
                         {type.name}
                       </option>
                     ))}
                   </select>
-                  {investorTypesError && (
-                    <p className="text-red-500 text-sm mt-1">{investorTypesError}</p>
+                  {businessTypesError && (
+                    <p className="text-red-500 text-sm mt-1">{businessTypesError}</p>
                   )}
-                  {errors.investorType && (
-                    <p className="text-red-500 text-sm mt-1">{errors.investorType[0]}</p>
+                  {errors.businessType && (
+                    <p className="text-red-500 text-sm mt-1">{errors.businessType[0]}</p>
                   )}
                 </div>
               </div>
@@ -372,7 +372,7 @@ export default function FunderRegisterPage() {
                 disabled={isLoading}
                 className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed py-3 text-base font-medium"
               >
-                {isLoading ? "Creating Account..." : "Create Funder Account"}
+                {isLoading ? "Creating Account..." : "Create Borrower Account"}
               </Button>
             </div>
 

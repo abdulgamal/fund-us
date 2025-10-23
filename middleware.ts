@@ -15,6 +15,7 @@ const PUBLIC_ROUTES = [
   '/',
   '/auth/login',
   '/auth/funder-register',
+  '/auth/borrower-register',
   '/loans',
 ];
 
