@@ -109,7 +109,7 @@ interface LoanApplication {
   updated_at: string;
   deleted_at: string | null;
   user_id: number | null;
-  syndicates: Syndicate[];
+  syndicate: Syndicate[] | null;
 }
 
 interface ApiResponse {
@@ -234,20 +234,33 @@ export default function ApplicationDetailsPage() {
               Submitted on {formatDate(application.created_at)}
             </p>
           </div>
-          <Badge className={`${getStatusColor(application.status)} text-sm font-medium px-4 py-2`}>
-            {application.status.replace('_', ' ').toUpperCase()}
-          </Badge>
+          <div className="flex items-center gap-4">
+            {/* Edit button - only show if syndicate is null OR no lead funder exists */}
+            {(application.syndicate === null || 
+              (application.syndicate && application.syndicate.length > 0 && 
+               application.syndicate.every(syndicate => !syndicate.lead_funder))) && (
+              <Link href={`/applications/${application.application_id}/edit`}>
+                <Button variant="outline" className="border-indigo-600 text-indigo-600 hover:bg-indigo-50">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Edit Application
+                </Button>
+              </Link>
+            )}
+            <Badge className={`${getStatusColor(application.status)} text-sm font-medium px-4 py-2`}>
+              {application.status.replace('_', ' ').toUpperCase()}
+            </Badge>
+          </div>
         </div>
 
         {/* Syndicates Section */}
-        {application.syndicates && application.syndicates.length > 0 && (
+        {application.syndicate && application.syndicate.length > 0 && (
           <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 mb-8">
             <h2 className="text-xl font-semibold mb-6 text-gray-800 flex items-center">
               <Building className="h-6 w-6 text-indigo-600 mr-3" />
               Funding Syndicates
             </h2>
             <div className="space-y-6">
-              {application.syndicates.map((syndicate) => (
+              {application.syndicate.map((syndicate) => (
                 <div key={syndicate.id} className="border border-gray-200 rounded-xl p-6 bg-gradient-to-r from-white to-gray-50 hover:shadow-md transition-shadow">
                   <div className="flex justify-between items-start mb-4">
                     <div>

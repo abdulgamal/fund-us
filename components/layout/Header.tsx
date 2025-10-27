@@ -48,23 +48,13 @@ export function Header() {
             </Link>
             <nav className="hidden md:ml-10 md:flex space-x-8">
               {/* Show different links based on user type */}
-              {isAuthenticated && user?.user_type === "lender" && (
                 <Link
                   href="/loans"
                   className="text-gray-700 hover:text-indigo-600"
                 >
                   Loan Marketplace
                 </Link>
-              )}
               
-              {isAuthenticated && user?.user_type === "borrower" && (
-                <Link
-                  href="/loans"
-                  className="text-gray-700 hover:text-indigo-600"
-                >
-                  My Loans
-                </Link>
-              )}
 
               {isAuthenticated && (
                 <Link

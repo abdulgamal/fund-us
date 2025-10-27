@@ -8,6 +8,68 @@ import { authGet } from "@/lib/api";
 import { toast } from "sonner";
 import Link from "next/link";
 
+interface LeadFunder {
+  id: number;
+  name: string;
+  email: string;
+  email_verified_at: string | null;
+  created_at: string;
+  updated_at: string;
+  first_name: string;
+  last_name: string;
+  user_type: string;
+  institution_name: string | null;
+  investor_type_id: number | null;
+  business_name: string | null;
+  business_type_id: number | null;
+}
+
+interface Bid {
+  id: number;
+  syndicate_id: number;
+  user_id: number;
+  amount: number;
+  rate: number;
+  term: string;
+  status: string;
+  status_reason: string | null;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Group {
+  id: number;
+  syndicate_id: number;
+  user_id: number;
+  funder_id: number;
+  status: string;
+  status_reason: string;
+  pledge_amount: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Syndicate {
+  id: number;
+  name: string;
+  description: string;
+  status: string;
+  created_by: number;
+  updated_by: number;
+  lead_funder: LeadFunder;
+  loan_application_id: number;
+  amount: number;
+  rate: number;
+  term: number;
+  risk: string;
+  funding_progress: number;
+  created_at: string;
+  updated_at: string;
+  bids: Bid[];
+  groups: Group[];
+}
+
 interface LoanApplication {
   id: number;
   application_id: string;
@@ -36,6 +98,9 @@ interface LoanApplication {
   status: string;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;
+  user_id: number | null;
+  syndicate: Syndicate | null;
 }
 
 export default function LoanDetailsPage() {
@@ -317,11 +382,13 @@ export default function LoanDetailsPage() {
           <Link href="/loans">
             <Button variant="outline">Back to Loans</Button>
           </Link>
-          <Link href={`/loans/${loanApplication.application_id}/commit?application_id=${loanApplication.application_id}`}>
-            <Button className="bg-indigo-600 hover:bg-indigo-700">
-              Commits
-            </Button>
-          </Link>
+          {loanApplication.syndicate && (
+            <Link href={`/loans/${loanApplication.application_id}/commit?syndicate_id=${loanApplication.syndicate.id}`}>
+              <Button className="bg-indigo-600 hover:bg-indigo-700">
+                Commits
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
     </div>

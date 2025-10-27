@@ -1,21 +1,34 @@
 'use client';
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiPost, login } from "@/lib/api";
-import type { LoginResponse } from "@/lib/types/api";
+import type { LoginResponse, User } from "@/lib/types/api";
 import { toast } from "sonner";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [redirectMessage, setRedirectMessage] = useState("");
+
+  useEffect(() => {
+    const message = searchParams.get('message');
+    if (message) {
+      setRedirectMessage(message);
+      toast.info("Authentication Required", {
+        description: message,
+        duration: 5000,
+      });
+    }
+  }, [searchParams]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -42,11 +55,19 @@ export default function LoginPage() {
             duration: 3000,
           });
           
-          // Redirect based on user type
-          if (result.data.user.user_type === "borrower") {
+          // Redirect based on redirect parameter or user type
+          const redirectPath = searchParams.get('redirect');
+          if (redirectPath) {
+            router.push(redirectPath);
+          } else if (result.data.user.user_type === "borrower") {
             router.push('/borrower/dashboard');
           } else if (result.data.user.user_type === "lender") {
-            router.push('/funder/dashboard');
+            // Check if lender has completed registration
+            if (result.data.user.completed_registration === 0) {
+              router.push('/funder/onboarding');
+            } else {
+              router.push('/funder/dashboard');
+            }
           } else if (result.data.user.user_type === "admin") {
             router.push('/bank/dashboard');
           } else if (result.data.user.user_type === "superadmin") {
@@ -98,6 +119,12 @@ export default function LoginPage() {
             </a>
           </p>
         </div>
+
+        {redirectMessage && (
+          <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded">
+            {redirectMessage}
+          </div>
+        )}
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">

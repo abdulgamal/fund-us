@@ -53,6 +53,7 @@ export function middleware(request: NextRequest) {
   if (!isPublicRoute && !isAuthenticated) {
     const loginUrl = new URL('/auth/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
+    loginUrl.searchParams.set('message', 'You need to login first');
     return NextResponse.redirect(loginUrl);
   }
 
@@ -64,6 +65,13 @@ export function middleware(request: NextRequest) {
           // User doesn't have permission for this route
           return NextResponse.redirect(new URL('/unauthorized', request.url));
         }
+      }
+    }
+
+    // Special check for /loans/[id]/commits and /loans/[application_id]/commit routes - only lenders allowed
+    if (pathname.match(/^\/loans\/[\w-]+\/(commits?|commit)/)) {
+      if (userType !== 'lender') {
+        return NextResponse.redirect(new URL('/unauthorized', request.url));
       }
     }
   }

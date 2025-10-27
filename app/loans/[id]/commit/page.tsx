@@ -9,6 +9,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { authGet, authPost, useAuthStore } from "@/lib/api";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
 
 interface LoanApplication {
   id: number;
@@ -17,7 +18,7 @@ interface LoanApplication {
   loan_amount: number;
   loan_purpose: string;
   industry: string;
-  syndicates: {
+  syndicate: {
     id: number;
     name: string;
     amount: number;
@@ -26,10 +27,12 @@ interface LoanApplication {
     risk: string;
     funding_progress: number;
     lead_funder: {
+      id: number;
       name: string;
       institution_name: string | null;
     };
-  }[];
+    bids: SyndicateBid[];
+  } | null;
 }
 
 interface SyndicateBid {
@@ -44,7 +47,7 @@ interface SyndicateBid {
   notes: string;
   created_at: string;
   updated_at: string;
-  user: {
+  user?: {
     id: number;
     name: string;
     email: string;
@@ -102,6 +105,10 @@ export default function CommitPage() {
 
       if (response.ok && data.success) {
         setLoanApplication(data.loan_application);
+        // Extract bids from the syndicate object
+        if (data.loan_application.syndicate && data.loan_application.syndicate.bids) {
+          setSyndicateBids(data.loan_application.syndicate.bids);
+        }
       } else {
         toast.error("Failed to load loan application", {
           description: "The loan application could not be found.",
@@ -122,23 +129,11 @@ export default function CommitPage() {
   const fetchSyndicateBids = async () => {
     setIsLoadingBids(true);
     try {
-      const response = await authGet(`/v1/syndicate-bids/loan-application/${id}`);
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        setSyndicateBids(data.syndicate_bids || []);
-      } else {
-        console.error("Failed to load syndicate bids", {
-          status: response.status,
-          statusText: response.statusText,
-          data: data,
-        });
-        // Don't show error toast, just log it - commits section can still work without this
-      }
+      // The bids are now included in the loan application response
+      // We'll extract them from the syndicate object when the loan application is fetched
+      setIsLoadingBids(false);
     } catch (error) {
       console.error("Error fetching syndicate bids:", error);
-      // Don't show error toast, just log it
-    } finally {
       setIsLoadingBids(false);
     }
   };
@@ -173,10 +168,10 @@ export default function CommitPage() {
   };
 
   const getRemainingAmount = () => {
-    if (!loanApplication || !loanApplication.syndicates || loanApplication.syndicates.length === 0) {
+    if (!loanApplication || !loanApplication.syndicate) {
       return loanApplication?.loan_amount || 0;
     }
-    const syndicate = loanApplication.syndicates[0];
+    const syndicate = loanApplication.syndicate;
     return syndicate.amount * (1 - syndicate.funding_progress / 100);
   };
 
@@ -202,37 +197,36 @@ export default function CommitPage() {
       return;
     }
 
-    const activeSyndicate = loanApplication.syndicates && loanApplication.syndicates.length > 0 
-      ? loanApplication.syndicates[0] 
-      : null;
+    const activeSyndicate = loanApplication.syndicate || null;
 
-    if (!activeSyndicate || !syndicateId) {
+    if (!activeSyndicate) {
       toast.error("Syndicate Required", {
         description: "Please select a valid syndicate to commit to.",
       });
       return;
     }
 
+    // Use the syndicate ID from the active syndicate
+    const syndicateIdToUse = syndicateId || activeSyndicate.id;
+
     setIsSubmitting(true);
     try {
       const payload = {
-        syndicate_id: parseInt(syndicateId),
-        user_id: user.id,
         amount: parseFloat(commitmentAmount),
-        rate: activeSyndicate.rate,
-        term: `${activeSyndicate.term} months`,
-        status: "pending",
         notes: notes || "",
       };
 
-      const response = await authPost("/v1/syndicate-bids/submit", payload);
+      const response = await authPost(`/v1/join-syndicate/${syndicateIdToUse}`, payload);
       const data = await response.json();
 
       if (response.ok && data.success) {
-        toast.success("Commitment Submitted!", {
-          description: data.message || "Your funding commitment has been submitted successfully.",
+        toast.success("Syndicate Join Request Submitted!", {
+          description: data.message || "Your request to join the syndicate has been submitted successfully.",
           duration: 3000,
         });
+        
+        // Log the successful response for debugging
+        console.log("Syndicate join request successful:", data);
         
         // Refresh the commits list
         fetchSyndicateBids();
@@ -245,12 +239,12 @@ export default function CommitPage() {
           router.push("/funder/commitments");
         }, 1500);
       } else {
-        throw new Error(data.message || "Failed to submit commitment");
+        throw new Error(data.message || "Failed to submit syndicate join request");
       }
     } catch (error) {
-      console.error("Error submitting commitment:", error);
+      console.error("Error submitting syndicate join request:", error);
       toast.error("Submission Failed", {
-        description: error instanceof Error ? error.message : "Failed to submit your commitment. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to submit your syndicate join request. Please try again.",
       });
     } finally {
       setIsSubmitting(false);
@@ -269,9 +263,7 @@ export default function CommitPage() {
     return null;
   }
 
-  const activeSyndicate = loanApplication.syndicates && loanApplication.syndicates.length > 0 
-    ? loanApplication.syndicates[0] 
-    : null;
+  const activeSyndicate = loanApplication.syndicate || null;
   const remainingAmount = getRemainingAmount();
 
   return (
@@ -321,9 +313,20 @@ export default function CommitPage() {
                 </div>
                 <div>
                   <Label>Lead Funder</Label>
-                  <p className="font-medium">
-                    {activeSyndicate.lead_funder.institution_name || activeSyndicate.lead_funder.name}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium">
+                      {activeSyndicate.lead_funder 
+                        ? (activeSyndicate.lead_funder.institution_name || activeSyndicate.lead_funder.name)
+                        : 'No lead funder yet'}
+                    </p>
+                    {activeSyndicate.lead_funder && (
+                      <Link href={`/auth/public-profile/${activeSyndicate.lead_funder.id}`}>
+                        <Button variant="link" size="sm" className="h-auto p-0">
+                          View Profile
+                        </Button>
+                      </Link>
+                    )}
+                  </div>
                 </div>
               </>
             )}
@@ -335,11 +338,11 @@ export default function CommitPage() {
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-          <h2 className="text-lg font-semibold mb-4">Funding Commitment</h2>
+          <h2 className="text-lg font-semibold mb-4">Join Syndicate</h2>
 
           <div className="space-y-6">
             <div>
-              <Label htmlFor="commitmentAmount">Amount to Commit (USD)</Label>
+              <Label htmlFor="commitmentAmount">Pledge Amount (USD)</Label>
               <Input
                 id="commitmentAmount"
                 type="number"
@@ -357,7 +360,12 @@ export default function CommitPage() {
 
             <div>
               <Label>Funding Type</Label>
-              <RadioGroup value={fundingType} onValueChange={setFundingType} className="mt-2">
+              <RadioGroup value={fundingType} onValueChange={(value) => {
+                setFundingType(value);
+                if (value === "full") {
+                  setCommitmentAmount(remainingAmount.toString());
+                }
+              }} className="mt-2">
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="syndicate" id="syndicate" />
                   <Label htmlFor="syndicate">
@@ -366,7 +374,7 @@ export default function CommitPage() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="full" id="full" />
-                  <Label htmlFor="full">Fund Entire Remaining Amount</Label>
+                  <Label htmlFor="full">Fund Entire Remaining Amount ({formatCurrency(remainingAmount)})</Label>
                 </div>
               </RadioGroup>
             </div>
@@ -389,7 +397,7 @@ export default function CommitPage() {
           <h2 className="text-lg font-semibold mb-4">Review & Submit</h2>
           <div className="space-y-4 mb-6">
             <div className="flex justify-between">
-              <span className="text-gray-600">Commitment Amount</span>
+              <span className="text-gray-600">Pledge Amount</span>
               <span className="font-medium text-indigo-600 text-lg">
                 {commitmentAmount ? formatCurrency(parseFloat(commitmentAmount)) : "$0.00"}
               </span>
@@ -425,7 +433,7 @@ export default function CommitPage() {
               onClick={handleSubmit}
               disabled={isSubmitting || !commitmentAmount || parseFloat(commitmentAmount) <= 0}
             >
-              {isSubmitting ? "Submitting..." : "Submit Commitment"}
+              {isSubmitting ? "Submitting..." : "Join Syndicate"}
             </Button>
           </div>
         </div>
@@ -452,10 +460,10 @@ export default function CommitPage() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
                     <div>
                       <h3 className="font-semibold text-gray-900">
-                        {bid.user.institution_name || bid.user.name}
+                        {bid.user?.institution_name || bid.user?.name || `User ${bid.user_id}`}
                       </h3>
                       <p className="text-sm text-gray-600">
-                        {bid.user.first_name} {bid.user.last_name}
+                        {bid.user ? `${bid.user.first_name} ${bid.user.last_name}` : `User ID: ${bid.user_id}`}
                       </p>
                     </div>
                     <Badge className={getStatusBadgeColor(bid.status)}>

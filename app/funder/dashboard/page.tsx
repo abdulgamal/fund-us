@@ -12,7 +12,6 @@ import Link from "next/link";
 interface Commitment {
   id: number;
   syndicate_id: number;
-  user_id: number;
   funder_id: number;
   status: string;
   status_reason: string;
@@ -27,15 +26,14 @@ interface Commitment {
     amount: number;
     rate: number;
     term: number;
-    risk: string;
+    risk: string | null;
     funding_progress: number;
-    loan_application: {
+    loan_application_id: number;
+    lead_funder: {
       id: number;
-      business_name: string;
-      industry: string;
-      loan_amount: number;
-      loan_purpose: string;
-    };
+      name: string;
+      institution_name: string | null;
+    } | null;
   };
 }
 
@@ -49,12 +47,16 @@ interface SyndicatedDeal {
   term: number;
   risk: string;
   funding_progress: number;
+  lead_funder: number;
+  loan_application_id: number;
   loan_application: {
     id: number;
+    application_id: string;
     business_name: string;
     industry: string;
     loan_amount: number;
     loan_purpose: string;
+    status: string;
   };
 }
 
@@ -96,24 +98,36 @@ export default function FunderDashboard() {
   const fetchPortalData = async () => {
     setIsLoading(true);
     try {
-      const response = await authGet("/v1/funder-portal");
-      const data = await response.json();
+      // Fetch current commitments from the syndicates endpoint
+      const commitmentsResponse = await authGet("/v1/syndicates/funder");
+      const commitmentsData = await commitmentsResponse.json();
 
-      if (response.ok && data.success) {
+      // Fetch syndicates that the user leads
+      const leadSyndicatesResponse = await authGet("/v1/syndicates/lead-funder");
+      const leadSyndicatesData = await leadSyndicatesResponse.json();
+
+      if (commitmentsResponse.ok && commitmentsData.success) {
+        // Get the latest 3 commitments - handle both paginated and non-paginated responses
+        const commitmentsArray = commitmentsData.syndicates.data || commitmentsData.syndicates;
+        const latestCommitments = Array.isArray(commitmentsArray) ? commitmentsArray.slice(0, 3) : [];
+        
+        // Get syndicates that the user leads
+        const leadSyndicates = leadSyndicatesResponse.ok && leadSyndicatesData.success ? leadSyndicatesData.syndicates.data : [];
+        
         setPortalData({
-          active_commitments: data.active_commitments || [],
-          syndicated_deals: data.syndicated_deals || [],
-          recommended_loan_opportunities: data.recommended_loan_opportunities || [],
+          active_commitments: latestCommitments || [],
+          syndicated_deals: leadSyndicates || [],
+          recommended_loan_opportunities: [], // Keep empty for now since we're focusing on commitments
         });
       } else {
-        toast.error("Failed to load dashboard data", {
+        toast.error("Failed to load commitments data", {
           description: "Please try refreshing the page.",
         });
       }
     } catch (error) {
-      console.error("Error fetching funder portal data:", error);
+      console.error("Error fetching commitments data:", error);
       toast.error("Error", {
-        description: "Failed to load dashboard data.",
+        description: "Failed to load commitments data.",
       });
     } finally {
       setIsLoading(false);
@@ -128,13 +142,22 @@ export default function FunderDashboard() {
     }).format(amount);
   };
 
-  const getRiskColor = (risk: string) => {
+  const getRiskColor = (risk: string | null | undefined) => {
+    if (!risk) return "bg-gray-100 text-gray-800 border-gray-200";
     switch (risk.toLowerCase()) {
       case "low":
         return "bg-green-100 text-green-800 border-green-200";
       case "medium":
         return "bg-yellow-100 text-yellow-800 border-yellow-200";
       case "high":
+        return "bg-red-100 text-red-800 border-red-200";
+      case "funded":
+        return "bg-green-100 text-green-800 border-green-200";
+      case "approved":
+        return "bg-blue-100 text-blue-800 border-blue-200";
+      case "pending":
+        return "bg-yellow-100 text-yellow-800 border-yellow-200";
+      case "rejected":
         return "bg-red-100 text-red-800 border-red-200";
       default:
         return "bg-gray-100 text-gray-800 border-gray-200";
@@ -255,7 +278,7 @@ export default function FunderDashboard() {
                           <span className="font-medium">{opportunity.syndicates[0].term} months</span>
                         </div>
                         <Badge className={getRiskColor(opportunity.syndicates[0].risk)}>
-                          {opportunity.syndicates[0].risk.toUpperCase()} RISK
+                          {opportunity.syndicates[0].risk ? `${opportunity.syndicates[0].risk.toUpperCase()} RISK` : 'N/A RISK'}
                         </Badge>
                       </>
                     )}
@@ -297,12 +320,23 @@ export default function FunderDashboard() {
                   <div className="flex justify-between items-start mb-4">
                     <div>
                       <h3 className="font-semibold text-lg">{commitment.syndicate.name}</h3>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {commitment.syndicate.loan_application.business_name} • {commitment.syndicate.loan_application.industry}
-                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="text-sm text-gray-600">
+                          Lead Funder: {commitment.syndicate.lead_funder 
+                            ? (commitment.syndicate.lead_funder.institution_name || commitment.syndicate.lead_funder.name)
+                            : 'No lead funder yet'}
+                        </p>
+                        {commitment.syndicate.lead_funder && (
+                          <Link href={`/auth/public-profile/${commitment.syndicate.lead_funder.id}`}>
+                            <Button variant="link" size="sm" className="h-auto p-0 text-xs">
+                              View Profile
+                            </Button>
+                          </Link>
+                        )}
+                      </div>
                     </div>
                     <Badge className={getRiskColor(commitment.syndicate.risk)}>
-                      {commitment.syndicate.risk.toUpperCase()} RISK
+                      {commitment.syndicate.risk ? `${commitment.syndicate.risk.toUpperCase()} RISK` : 'N/A RISK'}
                     </Badge>
                   </div>
 
@@ -340,9 +374,9 @@ export default function FunderDashboard() {
                       <p className="text-xs text-gray-500">Status Reason</p>
                       <p className="text-sm font-medium">{commitment.status_reason}</p>
                     </div>
-                    <Link href={`/loans/${commitment.syndicate.loan_application.id}`}>
+                    <Link href={`/syndicate/${commitment.syndicate.id}`}>
                       <Button variant="outline" size="sm">
-                        View Details
+                        View Syndicate
                       </Button>
                     </Link>
                   </div>
@@ -357,7 +391,7 @@ export default function FunderDashboard() {
         {/* Syndicated Deals Section */}
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-lg font-semibold">Fully Funded Deals</h2>
+            <h2 className="text-lg font-semibold"> Syndicates You Lead </h2>
           </div>
 
           {portalData && portalData.syndicated_deals.length > 0 ? (
@@ -369,8 +403,8 @@ export default function FunderDashboard() {
                 >
                   <div className="flex justify-between items-start mb-3">
                     <h3 className="font-semibold">{deal.name}</h3>
-                    <Badge className="bg-green-100 text-green-800 border-green-200">
-                      FUNDED
+                    <Badge className={getRiskColor(deal.loan_application.status)}>
+                      {deal.loan_application.status.toUpperCase()}
                     </Badge>
                   </div>
                   <p className="text-sm text-gray-600 mb-3">{deal.loan_application.business_name}</p>
@@ -392,6 +426,13 @@ export default function FunderDashboard() {
                   <div className="mt-4">
                     <Progress value={deal.funding_progress} className="h-2" />
                     <p className="text-xs text-gray-500 mt-1 text-center">{deal.funding_progress}% Funded</p>
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <Link href={`/syndicate/${deal.id}`}>
+                      <Button variant="outline" className="w-full" size="sm">
+                        View Syndicate
+                      </Button>
+                    </Link>
                   </div>
                 </div>
               ))}

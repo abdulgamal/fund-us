@@ -14,6 +14,8 @@ export interface User {
   investor_type: string | null;
   business_name: string | null;
   business_type: string | null;
+  completed_registration: number;
+  funder_profile: any | null;
 }
 
 /**
