@@ -1,27 +1,27 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { authGet } from "@/lib/api";
+import { apiGet, useAuthStore } from "@/lib/api";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-interface Syndicate {
+interface LeadFunder {
   id: number;
   name: string;
-  description: string;
-  status: string;
-  amount: number;
-  rate: number;
-  term: number;
-  risk: string;
-  funding_progress: number;
-  lead_funder: {
-    id: number;
-    name: string;
-    institution_name: string | null;
-  };
+  email: string;
+  email_verified_at: string | null;
+  created_at: string;
+  updated_at: string;
+  first_name: string;
+  last_name: string;
+  user_type: string;
+  institution_name: string | null;
+  investor_type_id: number | null;
+  business_name: string | null;
+  business_type_id: number | null;
 }
 
 interface LoanApplication {
@@ -29,17 +29,63 @@ interface LoanApplication {
   application_id: string;
   first_name: string;
   last_name: string;
+  email: string;
+  phone: string;
+  ssn: string;
   business_name: string;
   business_type: string;
+  registration_number: string;
+  tax_id_number: string;
+  business_address: string;
+  years_in_business: number;
   industry: string;
   annual_revenue: number;
   credit_score: number;
+  has_bankruptcy: number;
   loan_amount: number;
   loan_purpose: string;
+  business_license: string | null;
+  financial_statements: string | null;
+  tax_returns: string | null;
+  bank_statements: string | null;
+  proof_of_business_ownership: string | null;
   status: string;
   created_at: string;
-  years_in_business: number;
-  syndicates: Syndicate[];
+  updated_at: string;
+  deleted_at: string | null;
+  user_id: number | null;
+}
+
+interface Group {
+  id: number;
+  syndicate_id: number;
+  user_id: number;
+  funder_id: number;
+  status: string;
+  status_reason: string;
+  pledge_amount: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Syndicate {
+  id: number;
+  name: string;
+  description: string;
+  status: string;
+  created_by: number;
+  updated_by: number;
+  lead_funder: LeadFunder;
+  loan_application_id: number;
+  amount: number;
+  rate: number;
+  term: number;
+  risk: string;
+  funding_progress: number;
+  created_at: string;
+  updated_at: string;
+  loan_application: LoanApplication;
+  groups: Group[];
 }
 
 interface PaginationData {
@@ -52,19 +98,21 @@ interface PaginationData {
 }
 
 export default function LoansPage() {
-  const [loanApplications, setLoanApplications] = useState<LoanApplication[]>([]);
+  const router = useRouter();
+  const { isAuthenticated } = useAuthStore();
+  const [syndicates, setSyndicates] = useState<Syndicate[]>([]);
   const [pagination, setPagination] = useState<PaginationData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isPageChanging, setIsPageChanging] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
-    fetchLoanApplications(currentPage);
+    fetchSyndicates(currentPage);
   }, [currentPage]);
 
-  const fetchLoanApplications = async (page: number) => {
+  const fetchSyndicates = async (page: number) => {
     // Use different loading state for initial load vs page change
-    if (loanApplications.length === 0) {
+    if (syndicates.length === 0) {
       setIsLoading(true);
     } else {
       setIsPageChanging(true);
@@ -76,28 +124,28 @@ export default function LoansPage() {
     }
     
     try {
-      const response = await authGet(`/v1/loan-applications?page=${page}`);
+      const response = await apiGet(`/v1/public-syndicates?page=${page}`);
       const data = await response.json();
 
-      if (response.ok && data.success) {
-        setLoanApplications(data.loan_applications.data);
+      if (response.ok && data.status === "success") {
+        setSyndicates(data.data.data);
         setPagination({
-          current_page: data.loan_applications.current_page,
-          last_page: data.loan_applications.last_page,
-          per_page: data.loan_applications.per_page,
-          total: data.loan_applications.total,
-          from: data.loan_applications.from,
-          to: data.loan_applications.to,
+          current_page: data.data.current_page,
+          last_page: data.data.last_page,
+          per_page: data.data.per_page,
+          total: data.data.total,
+          from: data.data.from,
+          to: data.data.to,
         });
       } else {
-        toast.error("Failed to load loan applications", {
+        toast.error("Failed to load syndicates", {
           description: "Please try again later.",
         });
       }
     } catch (error) {
-      console.error("Error fetching loan applications:", error);
+      console.error("Error fetching syndicates:", error);
       toast.error("Error", {
-        description: "Failed to load loan applications.",
+        description: "Failed to load syndicates.",
       });
     } finally {
       setIsLoading(false);
@@ -182,7 +230,8 @@ export default function LoansPage() {
     return status.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
   };
 
-  const getRiskColor = (risk: string) => {
+  const getRiskColor = (risk: string | null | undefined) => {
+    if (!risk) return "bg-gray-100 text-gray-800 border-gray-200";
     switch (risk.toLowerCase()) {
       case "low":
         return "bg-green-100 text-green-800 border-green-200";
@@ -195,6 +244,22 @@ export default function LoansPage() {
     }
   };
 
+  const handleViewDetails = (applicationId: string) => {
+    if (!isAuthenticated) {
+      router.push(`/auth/login?redirect=/loans/${applicationId}&message=You need to login first`);
+      return;
+    }
+    router.push(`/loans/${applicationId}`);
+  };
+
+  const handleJoinSyndicate = (applicationId: string, syndicateId: number) => {
+    if (!isAuthenticated) {
+      router.push(`/auth/login?redirect=/loans/${applicationId}/commit?syndicate_id=${syndicateId}&message=You need to login first`);
+      return;
+    }
+    router.push(`/loans/${applicationId}/commit?syndicate_id=${syndicateId}`);
+  };
+
   return (
     <div className="py-12 px-4">
       <div className="max-w-7xl mx-auto">
@@ -202,8 +267,8 @@ export default function LoansPage() {
           <div>
             <h1 className="text-3xl font-bold mb-2">Investment Opportunities</h1>
             <p className="text-gray-600">
-              {pagination && loanApplications ? 
-                `${loanApplications.filter((loan) => loan.syndicates && loan.syndicates.length > 0).length} syndicated ${loanApplications.filter((loan) => loan.syndicates && loan.syndicates.length > 0).length === 1 ? 'opportunity' : 'opportunities'} available` 
+              {pagination && syndicates ? 
+                `${syndicates.length} syndicated ${syndicates.length === 1 ? 'opportunity' : 'opportunities'} available` 
                 : "Loading..."}
             </p>
           </div>
@@ -218,7 +283,7 @@ export default function LoansPage() {
           <div className="flex justify-center items-center py-20">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
           </div>
-        ) : loanApplications.filter((loan) => loan.syndicates && loan.syndicates.length > 0).length === 0 ? (
+        ) : syndicates.length === 0 ? (
           <div className="text-center py-20 bg-white rounded-lg shadow-sm border border-gray-200">
             <p className="text-gray-500 text-lg mb-4">No funding opportunities available</p>
             <p className="text-gray-400 text-sm mb-6">Check back later for new syndicated loan opportunities</p>
@@ -231,22 +296,20 @@ export default function LoansPage() {
         ) : (
           <>
             <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 transition-opacity duration-300 ${isPageChanging ? 'opacity-50' : 'opacity-100'}`}>
-              {loanApplications
-                .filter((loan) => loan.syndicates && loan.syndicates.length > 0)
-                .map((loan) => (
+              {syndicates.map((syndicate) => (
                 <div
-                  key={loan.id}
+                  key={syndicate.id}
                   className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow flex flex-col"
                 >
                   <div className="flex justify-between items-start mb-4">
                     <div>
                       <h3 className="font-semibold text-lg text-gray-900">
-                        {loan.business_name}
+                        {syndicate.loan_application.business_name}
                       </h3>
-                      <p className="text-sm text-gray-600">{loan.industry}</p>
+                      <p className="text-sm text-gray-600">{syndicate.loan_application.industry}</p>
                     </div>
-                    <Badge className={getStatusColor(loan.status)}>
-                      {formatStatus(loan.status)}
+                    <Badge className={getStatusColor(syndicate.loan_application.status)}>
+                      {formatStatus(syndicate.loan_application.status)}
                     </Badge>
                   </div>
 
@@ -254,31 +317,31 @@ export default function LoansPage() {
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">Application ID:</span>
                       <span className="font-medium text-gray-900">
-                        {loan.application_id.substring(0, 12)}...
+                        {syndicate.loan_application.application_id.substring(0, 12)}...
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">Loan Amount:</span>
                       <span className="font-bold text-indigo-600">
-                        {formatCurrency(loan.loan_amount)}
+                        {formatCurrency(syndicate.loan_application.loan_amount)}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">Annual Revenue:</span>
                       <span className="font-medium text-gray-900">
-                        {formatCurrency(loan.annual_revenue)}
+                        {formatCurrency(syndicate.loan_application.annual_revenue)}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">Credit Score:</span>
                       <span className="font-medium text-gray-900">
-                        {loan.credit_score}
+                        {syndicate.loan_application.credit_score}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">Years in Business:</span>
                       <span className="font-medium text-gray-900">
-                        {loan.years_in_business}
+                        {syndicate.loan_application.years_in_business}
                       </span>
                     </div>
                   </div>
@@ -287,38 +350,45 @@ export default function LoansPage() {
                   <div className="mt-4 pt-4 border-t border-gray-200">
                     <div className="flex justify-between items-center mb-2">
                       <p className="text-xs font-semibold text-gray-700">
-                        {loan.syndicates[0].name}
+                        {syndicate.name}
                       </p>
-                      <Badge className={getRiskColor(loan.syndicates[0].risk)}>
-                        {loan.syndicates[0].risk.toUpperCase()}
+                      <Badge className={getRiskColor(syndicate.risk)}>
+                        {syndicate.risk ? syndicate.risk.toUpperCase() : 'N/A'}
                       </Badge>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs mb-2">
                       <div>
                         <span className="text-gray-600">Rate:</span>
-                        <span className="font-semibold ml-1">{loan.syndicates[0].rate}%</span>
+                        <span className="font-semibold ml-1">{syndicate.rate}%</span>
                       </div>
                       <div>
                         <span className="text-gray-600">Term:</span>
-                        <span className="font-semibold ml-1">{loan.syndicates[0].term} mo</span>
+                        <span className="font-semibold ml-1">{syndicate.term} mo</span>
                       </div>
                     </div>
                     <div className="mb-2">
                       <div className="flex justify-between text-xs mb-1">
                         <span className="text-gray-600">Funding Progress</span>
-                        <span className="font-semibold">{loan.syndicates[0].funding_progress}%</span>
+                        <span className="font-semibold">{syndicate.funding_progress}%</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div
                           className="bg-indigo-600 h-2 rounded-full transition-all"
-                          style={{ width: `${loan.syndicates[0].funding_progress}%` }}
+                          style={{ width: `${syndicate.funding_progress}%` }}
                         ></div>
                       </div>
                     </div>
-                    {loan.syndicates[0].lead_funder ? (
-                      <p className="text-xs text-gray-600">
-                        Led by: <span className="font-medium">{loan.syndicates[0].lead_funder.institution_name || loan.syndicates[0].lead_funder.name}</span>
-                      </p>
+                    {syndicate.lead_funder ? (
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-gray-600">
+                          Led by: <span className="font-medium">{syndicate.lead_funder.institution_name || syndicate.lead_funder.name}</span>
+                        </p>
+                        <Link href={`/auth/public-profile/${syndicate.lead_funder.id}`}>
+                          <Button variant="link" size="sm" className="h-auto p-0 text-xs">
+                            View Profile
+                          </Button>
+                        </Link>
+                      </div>
                     ) : (
                       <p className="text-xs text-green-600 font-medium">
                         🚀 Be the first to lead this syndicate!
@@ -327,25 +397,29 @@ export default function LoansPage() {
                   </div>
 
                   <div className="mt-auto pt-4 space-y-3">
-                    <Link href={`/loans/${loan.application_id}`}>
-                      <Button variant="outline" className="w-full">
-                        View Details
-                      </Button>
-                    </Link>
+                    <Button 
+                      variant="outline" 
+                      className="w-full"
+                      onClick={() => handleViewDetails(syndicate.loan_application.application_id)}
+                    >
+                      View Details
+                    </Button>
                     
                     {/* Funding Buttons */}
-                    {loan.syndicates[0].lead_funder ? (
-                      <Link href={`/loans/${loan.id}/commits?syndicate_id=${loan.syndicates[0].id}`}>
-                        <Button className="w-full mt-3 bg-indigo-600 hover:bg-indigo-700">
-                          Join Syndicate
-                        </Button>
-                      </Link>
+                    {syndicate.lead_funder ? (
+                      <Button 
+                        className="w-full mt-3 bg-indigo-600 hover:bg-indigo-700"
+                        onClick={() => handleJoinSyndicate(syndicate.loan_application.application_id, syndicate.id)}
+                      >
+                        Join Syndicate
+                      </Button>
                     ) : (
-                      <Link href={`/loans/${loan.id}/commits?syndicate_id=${loan.syndicates[0].id}`}>
-                        <Button className="w-full mt-3 bg-green-600 hover:bg-green-700">
-                          Be the First to Fund
-                        </Button>
-                      </Link>
+                      <Button 
+                        className="w-full mt-3 bg-green-600 hover:bg-green-700"
+                        onClick={() => handleJoinSyndicate(syndicate.loan_application.application_id, syndicate.id)}
+                      >
+                        Be the First to Fund
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -436,7 +510,7 @@ export default function LoansPage() {
 
                 {/* Page Info */}
                 <div className="text-center mt-4 text-sm text-gray-600">
-                  Showing {loanApplications.filter((loan) => loan.syndicates && loan.syndicates.length > 0).length} syndicated opportunities on this page
+                  Showing {syndicates.length} syndicated opportunities on this page
                 </div>
               </div>
             )}

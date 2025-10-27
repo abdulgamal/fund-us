@@ -427,6 +427,8 @@ export default function BorrowerDashboard() {
         }
       });
       
+      // Include the bid even if we can't find matching syndicate/application data
+      // This ensures pending bids are always shown
       enrichedBids.push({
         ...bid,
         syndicate: foundSyndicate,
@@ -638,11 +640,6 @@ export default function BorrowerDashboard() {
               {allBids && allBids.length > 0 ? (
                 <div className="space-y-4">
                   {allBids.map((bid) => {
-                    // Skip bids without syndicate/application data
-                    if (!bid.syndicate || !bid.application) {
-                      return null;
-                    }
-                    
                     return (
                       <div
                         key={bid.id}
@@ -653,14 +650,23 @@ export default function BorrowerDashboard() {
                             <div className="flex items-start justify-between mb-3">
                               <div>
                                 <h3 className="text-lg font-semibold text-gray-900">
-                                  {bid.syndicate.name}
+                                  {bid.syndicate ? bid.syndicate.name : `Syndicate #${bid.syndicate_id}`}
                                 </h3>
-                                <p className="text-sm text-gray-600 mt-1">
-                                  {bid.syndicate.description}
-                                </p>
-                                <p className="text-xs text-gray-500 mt-1">
-                                  For: {bid.application.business_name}
-                                </p>
+                                {bid.syndicate && (
+                                  <p className="text-sm text-gray-600 mt-1">
+                                    {bid.syndicate.description}
+                                  </p>
+                                )}
+                                {bid.application && (
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    For: {bid.application.business_name}
+                                  </p>
+                                )}
+                                {!bid.syndicate && (
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    Syndicate ID: {bid.syndicate_id}
+                                  </p>
+                                )}
                               </div>
                               <Badge className={getStatusColor(bid.status)}>
                                 {formatStatus(bid.status)}
@@ -689,7 +695,7 @@ export default function BorrowerDashboard() {
                               <div>
                                 <p className="text-sm text-gray-500">Lender</p>
                                 <p className="text-base font-medium text-gray-900">
-                                  {bid.syndicate.lead_funder.name}
+                                  {bid.syndicate?.lead_funder?.name || "Unknown"}
                                 </p>
                               </div>
                             </div>
@@ -703,18 +709,20 @@ export default function BorrowerDashboard() {
                               </div>
                             )}
 
-                            {/* Funding Progress */}
-                            <div className="mt-4">
-                              <div className="flex justify-between items-center mb-2">
-                                <span className="text-sm font-medium text-gray-700">
-                                  Funding Progress
-                                </span>
-                                <span className="text-sm text-gray-600">
-                                  {bid.syndicate.funding_progress}%
-                                </span>
+                            {/* Funding Progress - only show if syndicate data is available */}
+                            {bid.syndicate && (
+                              <div className="mt-4">
+                                <div className="flex justify-between items-center mb-2">
+                                  <span className="text-sm font-medium text-gray-700">
+                                    Funding Progress
+                                  </span>
+                                  <span className="text-sm text-gray-600">
+                                    {bid.syndicate.funding_progress}%
+                                  </span>
+                                </div>
+                                <Progress value={bid.syndicate.funding_progress} className="h-2" />
                               </div>
-                              <Progress value={bid.syndicate.funding_progress} className="h-2" />
-                            </div>
+                            )}
                           </div>
 
                           <div className="flex flex-col sm:flex-row lg:flex-col gap-2 w-full sm:w-auto lg:w-48 sm:min-w-0 sm:max-w-full lg:max-w-none">

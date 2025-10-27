@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -9,11 +9,44 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { authPost, authGet } from "@/lib/api";
+
+interface InvestorType {
+  id: number;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface FormData {
+  [key: string]: any;
+}
+
+interface Question {
+  id: string;
+  type: string;
+  label: string;
+  placeholder?: string;
+  inputType?: string;
+  options?: Array<{ id: string; label: string; value: string }>;
+  hasOther?: boolean;
+  otherId?: string;
+  condition?: (formData: FormData) => boolean;
+  description?: string;
+}
+
+interface Questions {
+  [key: string]: Question[];
+}
+
+interface CompletedTabs {
+  [key: string]: boolean;
+}
 
 export default function FunderOnboardingPage() {
   const [currentTab, setCurrentTab] = useState("business-model");
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     // Business Model fields
     businessModel: [],
     captureFinancialPerformance: "",
@@ -66,12 +99,48 @@ export default function FunderOnboardingPage() {
     systemUsers: [
       { name: "", email: "", department: "", title: "", accessLevel: "" },
     ],
+
+    // API fields for registration
+    institution_name: "",
+    investor_type_id: undefined,
+    years_experience: "",
+    investment_preferences: "",
+    risk_tolerance: "",
+    minimum_investment: "",
+    maximum_investment: "",
   });
 
-  const [completedTabs, setCompletedTabs] = useState({});
+  const [completedTabs, setCompletedTabs] = useState<CompletedTabs>({});
   const [showMobileTabs, setShowMobileTabs] = useState(false);
+  const [investorTypes, setInvestorTypes] = useState<InvestorType[]>([]);
+  const [loadingInvestorTypes, setLoadingInvestorTypes] = useState(true);
 
   const router = useRouter();
+
+  // Fetch investor types on component mount
+  useEffect(() => {
+    const fetchInvestorTypes = async () => {
+      try {
+        const response = await authGet("/investor-types");
+        if (response.ok) {
+          const result = await response.json();
+          if (result.status === "success" && result.data) {
+            setInvestorTypes(result.data);
+          } else {
+            console.error("Failed to fetch investor types:", result.message);
+          }
+        } else {
+          console.error("Failed to fetch investor types");
+        }
+      } catch (error) {
+        console.error("Error fetching investor types:", error);
+      } finally {
+        setLoadingInvestorTypes(false);
+      }
+    };
+
+    fetchInvestorTypes();
+  }, []);
 
   const tabs = [
     { id: "business-model", label: "Business Model" },
@@ -82,7 +151,7 @@ export default function FunderOnboardingPage() {
     { id: "governance", label: "Governance" },
   ];
 
-  const questions = {
+  const questions: Questions = {
     "business-model": [
       {
         id: "businessModel",
@@ -157,6 +226,25 @@ export default function FunderOnboardingPage() {
         type: "textarea",
         label: "Who are your external funding partners?*",
         placeholder: "List your external funding partners...",
+      },
+      {
+        id: "institution_name",
+        type: "input",
+        label: "Institution Name*",
+        placeholder: "Enter your institution name",
+      },
+      {
+        id: "investor_type_id",
+        type: "select",
+        label: "Investor Type*",
+        placeholder: "Select your investor type",
+      },
+      {
+        id: "years_experience",
+        type: "input",
+        label: "Years of Experience*",
+        placeholder: "Enter number of years",
+        inputType: "number",
       },
     ],
     "lending-products": [
@@ -568,15 +656,221 @@ export default function FunderOnboardingPage() {
     }
   };
 
-  const handleUserChange = (index, field, value) => {
+  const handleUserChange = (index: number, field: string, value: string) => {
     const updatedUsers = [...(formData.systemUsers || [])];
     updatedUsers[index] = { ...updatedUsers[index], [field]: value };
     setFormData({ ...formData, systemUsers: updatedUsers });
   };
 
-  const handleSubmit = () => {
-    console.log("Funder onboarding submitted:", formData);
-    router.push("/loans");
+  const handleFillTestData = () => {
+    setFormData({
+      // Business Model fields
+      businessModel: ["cdfi", "credit-union"],
+      captureFinancialPerformance: "yes",
+      externalUnderwriting: "no",
+      loanProducts: "We offer microloans, small business loans, and credit lines for underserved communities.",
+      sbaLender: "yes",
+      startingCapital: "$5,000,000",
+      capitalSources: "Community Development Fund, Federal Grant Program, Private Donations",
+      externalPartners: "Local banks, Community development corporations, Government agencies",
+
+      // Lending Products fields
+      amortizationMethods: ["Fixed Payment", "Interest Only"],
+      otherAmortization: "Custom amortization method",
+      interestMethods: ["Simple Interest", "Fixed Interest"],
+      otherInterestMethod: "Custom interest calculation",
+      interestRateSourcing: "Based on prime rates plus our internal policy adjustments",
+      underwritingMethods: ["Manual", "Score Based (e.g. FICO)", "Cashflow (e.g. POS data)"],
+      otherUnderwritingMethod: "Custom underwriting criteria",
+      qualificationCriteria: "Minimum 2 years in business, positive cash flow, collateral requirements",
+      collateralTypes: "Real estate, equipment, personal guarantees, business assets",
+      liabilities: "Current liabilities include $2M in outstanding loans and $500K in operational debt",
+
+      // Customer Support fields
+      serviceRegions: "We service the tri-state area including New York, New Jersey, and Connecticut with focus on urban and rural underserved communities",
+      impactReporting: ["Job Creation", "Wealth Development", "Minority Business Self-Sufficiency"],
+      otherImpact: "",
+      kycMethods: "ID verification, LexisNexis background checks, bank statement verification, business registration validation",
+      techAssistance: "We provide technical assistance including business plan development, financial management training, and marketing support",
+      reportingMetrics: "Loan performance metrics, portfolio at risk, default rates, community impact measurements",
+
+      // Integration fields
+      paymentMethods: ["ACH", "Wire Transfer"],
+      otherPaymentMethod: "Cryptocurrency payments",
+      metro2Reporting: ["Integration"],
+      otherMetro2Method: "Custom reporting method",
+      externalIntegration: "yes",
+      externalSystems: "QuickBooks, Salesforce CRM, Core banking system",
+      systemsNames: "QuickBooks Online, Salesforce Financial Services Cloud, FISERV Core Banking",
+
+      // Operations fields
+      accessControl: "IT department manages user access with approval from senior management",
+      loanDocumentation: "yes",
+      operationalProcesses: "Loan origination through online application, manual underwriting review, automated approval for small loans, manual approval for larger amounts",
+      reportingNeeds: "Daily loan pipeline reports, monthly portfolio performance, quarterly impact reports, annual compliance reports",
+      complianceRequirements: "CRA compliance, Fair Lending Act, Truth in Lending Act, Equal Credit Opportunity Act, state lending regulations",
+
+      // Governance fields
+      cybersecurityPolicy: "We have comprehensive cybersecurity policies including multi-factor authentication, encrypted data storage, regular security audits, and employee training programs",
+      regulatoryCompliance: "We follow all federal and state banking regulations, maintain proper documentation, conduct regular audits, and ensure compliance with all applicable laws",
+      systemUsers: [
+        { 
+          name: "John Smith", 
+          email: "john.smith@company.com", 
+          department: "Lending", 
+          title: "Loan Officer", 
+          accessLevel: "user" 
+        },
+        { 
+          name: "Sarah Johnson", 
+          email: "sarah.johnson@company.com", 
+          department: "Administration", 
+          title: "Operations Manager", 
+          accessLevel: "manager" 
+        },
+        { 
+          name: "Mike Davis", 
+          email: "mike.davis@company.com", 
+          department: "IT", 
+          title: "System Administrator", 
+          accessLevel: "admin" 
+        },
+      ],
+
+      // API fields for registration
+      institution_name: "Community Development Financial Institution",
+      investor_type_id: 6, // CDFI
+      years_experience: "15",
+      investment_preferences: "Technology startups, Healthcare innovations, Sustainable energy projects",
+      risk_tolerance: "medium",
+      minimum_investment: "25000",
+      maximum_investment: "500000",
+    });
+  };
+
+  const handleSubmit = async () => {
+    try {
+      // Structure the data according to the API requirements
+      const submitData = {
+        institution_name: formData.institution_name || "",
+        investor_type_id: formData.investor_type_id || 0,
+        years_experience: parseInt(formData.years_experience) || 0,
+        investment_preferences: formData.investment_preferences || "",
+        risk_tolerance: formData.risk_tolerance || "",
+        minimum_investment: parseInt(formData.minimum_investment) || 0,
+        maximum_investment: parseInt(formData.maximum_investment) || 0,
+        
+        // Group form data by sections as expected by the API
+        business_model: {
+          businessModel: Array.isArray(formData.businessModel) ? formData.businessModel.join(", ") : (formData.businessModel || ""),
+          captureFinancialPerformance: formData.captureFinancialPerformance || "",
+          externalUnderwriting: formData.externalUnderwriting || "",
+          loanProducts: formData.loanProducts || "",
+          sbaLender: formData.sbaLender || "",
+          startingCapital: formData.startingCapital || "",
+          capitalSources: formData.capitalSources || "",
+          externalPartners: formData.externalPartners || "",
+        },
+        
+        lending_products: {
+          amortizationMethods: Array.isArray(formData.amortizationMethods) ? formData.amortizationMethods.join(", ") : (formData.amortizationMethods || ""),
+          otherAmortization: formData.otherAmortization || "",
+          interestMethods: Array.isArray(formData.interestMethods) ? formData.interestMethods.join(", ") : (formData.interestMethods || ""),
+          otherInterestMethod: formData.otherInterestMethod || "",
+          interestRateSourcing: formData.interestRateSourcing || "",
+          underwritingMethods: Array.isArray(formData.underwritingMethods) ? formData.underwritingMethods.join(", ") : (formData.underwritingMethods || ""),
+          otherUnderwritingMethod: formData.otherUnderwritingMethod || "",
+          qualificationCriteria: formData.qualificationCriteria || "",
+          collateralTypes: formData.collateralTypes || "",
+          liabilities: formData.liabilities || "",
+        },
+        
+        customer_support: JSON.stringify({
+          serviceRegions: formData.serviceRegions || "",
+          impactReporting: formData.impactReporting || [],
+          otherImpact: formData.otherImpact || "",
+          kycMethods: formData.kycMethods || "",
+          techAssistance: formData.techAssistance || "",
+          reportingMetrics: formData.reportingMetrics || "",
+        }),
+        
+        payment_integrations: {
+          paymentMethods: Array.isArray(formData.paymentMethods) ? formData.paymentMethods.join(", ") : (formData.paymentMethods || ""),
+          otherPaymentMethod: formData.otherPaymentMethod || "",
+          metro2Reporting: Array.isArray(formData.metro2Reporting) ? formData.metro2Reporting.join(", ") : (formData.metro2Reporting || ""),
+          otherMetro2Method: formData.otherMetro2Method || "",
+          externalIntegration: formData.externalIntegration || "",
+          externalSystems: formData.externalSystems || "",
+          systemsNames: formData.systemsNames || "",
+        },
+        
+        operations: JSON.stringify({
+          accessControl: formData.accessControl || "",
+          loanDocumentation: formData.loanDocumentation || "",
+          operationalProcesses: formData.operationalProcesses || "",
+          reportingNeeds: formData.reportingNeeds || "",
+          complianceRequirements: formData.complianceRequirements || "",
+        }),
+        
+        governance: JSON.stringify({
+          cybersecurityPolicy: formData.cybersecurityPolicy || "",
+          regulatoryCompliance: formData.regulatoryCompliance || "",
+          systemUsers: formData.systemUsers || [],
+        }),
+      };
+
+      console.log("Submitting funder registration:", submitData);
+      console.log("Submit data stringified:", JSON.stringify(submitData, null, 2));
+      
+      const response = await authPost("/v1/complete-registration", submitData);
+      
+      console.log("Response status:", response.status);
+      console.log("Response ok:", response.ok);
+      console.log("Response headers:", response.headers);
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log("Registration completed successfully:", result);
+        router.push("/funder/dashboard");
+      } else {
+        let errorMessage = "Registration failed. Please try again.";
+        
+        try {
+          // Check if response has content
+          const responseText = await response.text();
+          console.log("Raw response text:", responseText);
+          
+          if (responseText) {
+            const errorData = JSON.parse(responseText);
+            console.error("Registration failed - Full error:", errorData);
+            console.error("Error message:", errorData.message);
+            console.error("Error status:", errorData.status);
+            console.error("Error status_code:", errorData.status_code);
+            
+            if (errorData.message && typeof errorData.message === 'object') {
+              // Handle validation errors
+              const validationErrors = Object.entries(errorData.message)
+                .map(([field, errors]) => `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`)
+                .join('\n');
+              errorMessage = `Validation errors:\n${validationErrors}`;
+            } else if (errorData.message) {
+              errorMessage = errorData.message;
+            }
+          } else {
+            console.error("Empty response body");
+            errorMessage = `Registration failed with status ${response.status} and empty response. Please try again.`;
+          }
+        } catch (parseError) {
+          console.error("Failed to parse error response:", parseError);
+          errorMessage = `Registration failed with status ${response.status}. Please try again.`;
+        }
+        
+        alert(errorMessage);
+      }
+    } catch (error) {
+      console.error("Error submitting registration:", error);
+      alert("An error occurred. Please try again.");
+    }
   };
 
   const renderQuestion = () => {
@@ -590,7 +884,7 @@ export default function FunderOnboardingPage() {
               {currentQuestion.label}
             </Label>
             <div className="space-y-3">
-              {currentQuestion.options.map((option) => (
+              {currentQuestion.options?.map((option) => (
                 <div key={option.id} className="flex items-center space-x-2">
                   <Checkbox
                     id={option.id}
@@ -603,7 +897,7 @@ export default function FunderOnboardingPage() {
                         ...formData,
                         [currentQuestion.id]: checked
                           ? [...current, option.value]
-                          : current.filter((item) => item !== option.value),
+                          : current.filter((item: any) => item !== option.value),
                       });
                     }}
                   />
@@ -624,7 +918,7 @@ export default function FunderOnboardingPage() {
                       ...formData,
                       [currentQuestion.id]: checked
                         ? [...current, "other"]
-                        : current.filter((item) => item !== "other"),
+                        : current.filter((item: any) => item !== "other"),
                     });
                   }}
                 />
@@ -635,11 +929,11 @@ export default function FunderOnboardingPage() {
                   <Input
                     placeholder="Specify other"
                     className="ml-2 flex-1"
-                    value={formData[currentQuestion.otherId] || ""}
+                    value={currentQuestion.otherId ? (formData[currentQuestion.otherId] || "") : ""}
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        [currentQuestion.otherId]: e.target.value,
+                        [currentQuestion.otherId || ""]: e.target.value,
                       })
                     }
                   />
@@ -665,7 +959,7 @@ export default function FunderOnboardingPage() {
               }
               className="space-y-2"
             >
-              {currentQuestion.options.map((option) => (
+              {currentQuestion.options?.map((option) => (
                 <div key={option.id} className="flex items-center space-x-2">
                   <RadioGroupItem value={option.value} id={option.id} />
                   <Label htmlFor={option.id} className="cursor-pointer">
@@ -688,7 +982,7 @@ export default function FunderOnboardingPage() {
             </Label>
             <Input
               id={currentQuestion.id}
-              type="text"
+              type={currentQuestion.inputType || "text"}
               value={formData[currentQuestion.id] || ""}
               onChange={(e) =>
                 setFormData({
@@ -728,6 +1022,41 @@ export default function FunderOnboardingPage() {
           </div>
         );
 
+      case "select":
+        return (
+          <div className="space-y-4">
+            <Label
+              htmlFor={currentQuestion.id}
+              className="text-base font-medium"
+            >
+              {currentQuestion.label}
+            </Label>
+            {loadingInvestorTypes ? (
+              <div className="text-gray-500">Loading investor types...</div>
+            ) : (
+              <select
+                id={currentQuestion.id}
+                value={formData[currentQuestion.id] || ""}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    [currentQuestion.id]: e.target.value ? parseInt(e.target.value) : undefined,
+                  })
+                }
+                className="w-full border border-gray-300 rounded-md p-3 focus:ring-indigo-500 focus:border-indigo-500"
+                required
+              >
+                <option value="">{currentQuestion.placeholder}</option>
+                {investorTypes.map((type) => (
+                  <option key={type.id} value={type.id}>
+                    {type.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        );
+
       case "users":
         return (
           <div className="space-y-4">
@@ -738,7 +1067,7 @@ export default function FunderOnboardingPage() {
               {currentQuestion.description}
             </p>
 
-            {formData.systemUsers?.map((user, index) => (
+            {formData.systemUsers?.map((user: any, index: number) => (
               <div
                 key={index}
                 className="space-y-4 p-4 border border-gray-200 rounded-md"
@@ -752,7 +1081,7 @@ export default function FunderOnboardingPage() {
                       size="sm"
                       onClick={() => {
                         const updatedUsers = formData.systemUsers.filter(
-                          (_, i) => i !== index
+                          (_: any, i: number) => i !== index
                         );
                         setFormData({
                           ...formData,
@@ -765,7 +1094,7 @@ export default function FunderOnboardingPage() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md: estava-cols-2 gap-4">
                   <div>
                     <Label className="text-sm font-medium">Name</Label>
                     <Input
@@ -875,7 +1204,7 @@ export default function FunderOnboardingPage() {
     return true;
   };
 
-  const handleTabChange = (tabId) => {
+  const handleTabChange = (tabId: string) => {
     setCurrentTab(tabId);
     if (completedTabs[tabId]) {
       setCurrentQuestionIndex(questions[tabId].length);
@@ -892,6 +1221,18 @@ export default function FunderOnboardingPage() {
           <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-center sm:text-left">
             Complete Your Funder Profile
           </h1>
+
+          {/* Test Data Button */}
+          <div className="mb-4 text-center">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleFillTestData}
+              className="text-sm"
+            >
+              🧪 Fill Test Data (For Testing)
+            </Button>
+          </div>
 
           <Progress value={progress} className="h-2 mb-6 sm:mb-8" />
 
@@ -1004,7 +1345,7 @@ export default function FunderOnboardingPage() {
                   Next:{" "}
                   {
                     tabs[tabs.findIndex((tab) => tab.id === currentTab) + 1]
-                      ?.shortLabel
+                      ?.label
                   }
                 </Button>
               )
