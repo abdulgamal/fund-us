@@ -133,10 +133,39 @@ interface DashboardStats {
   total_bids: number;
 }
 
+interface BorrowerSyndicate {
+  id: number;
+  name: string;
+  description: string;
+  status: string;
+  created_by: number | null;
+  updated_by: number | null;
+  lead_funder: number | null;
+  loan_application_id: number;
+  amount: number;
+  rate: number | null;
+  term: number | null;
+  risk: string | null;
+  funding_progress: number | null;
+  created_at: string;
+  updated_at: string;
+  groups: {
+    id: number;
+    syndicate_id: number;
+    funder_id: number;
+    status: string;
+    status_reason: string;
+    pledge_amount: number;
+    created_at: string;
+    updated_at: string;
+  }[];
+}
+
 export default function BorrowerDashboard() {
   const router = useRouter();
   const [applications, setApplications] = useState<LoanApplication[]>([]);
   const [syndicateBids, setSyndicateBids] = useState<SyndicateBid[]>([]);
+  const [borrowerSyndicates, setBorrowerSyndicates] = useState<BorrowerSyndicate[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
     total_applications: 0,
     pending_applications: 0,
@@ -159,14 +188,16 @@ export default function BorrowerDashboard() {
   const fetchDashboardData = async () => {
     setIsLoading(true);
     try {
-      // Fetch both applications and bids in parallel
-      const [appsResponse, bidsResponse] = await Promise.all([
+      // Fetch applications, bids, and borrower syndicates in parallel
+      const [appsResponse, bidsResponse, syndicatesResponse] = await Promise.all([
         authGet("/v1/loan-applications"),
-        authGet("/v1/syndicate-bids")
+        authGet("/v1/syndicate-bids"),
+        authGet("/v1/syndicates/borrower")
       ]);
 
       const appsData: ApiResponse = await appsResponse.json();
       const bidsData: SyndicateBidsResponse = await bidsResponse.json();
+      const syndicatesData = await syndicatesResponse.json();
 
       if (appsResponse.ok && appsData.success) {
         const apps = appsData.loan_applications.data;
@@ -183,6 +214,11 @@ export default function BorrowerDashboard() {
           // Calculate stats without bids
           const calculatedStats = calculateStats(apps, []);
           setStats(calculatedStats);
+        }
+
+        // Set borrower syndicates if available
+        if (syndicatesResponse.ok && syndicatesData.success && syndicatesData.syndicates) {
+          setBorrowerSyndicates(syndicatesData.syndicates);
         }
       } else {
         toast.error("Failed to load applications", {
@@ -484,11 +520,16 @@ export default function BorrowerDashboard() {
 
         {/* Main Content */}
         <Tabs defaultValue="applications" className="space-y-4 sm:space-y-6">
-          <TabsList className="bg-white border border-gray-200 w-full sm:w-auto grid grid-cols-2 sm:inline-grid">
+          <TabsList className="bg-white border border-gray-200 w-full sm:w-auto grid grid-cols-3 sm:inline-grid">
             <TabsTrigger value="applications" className="data-[state=active]:bg-indigo-50 text-sm sm:text-base">
               <span className="hidden sm:inline">My Applications</span>
               <span className="sm:hidden">Applications</span>
               <span className="ml-1">({applications.length})</span>
+            </TabsTrigger>
+            <TabsTrigger value="syndicates" className="data-[state=active]:bg-indigo-50 text-sm sm:text-base">
+              <span className="hidden sm:inline">My Syndicates</span>
+              <span className="sm:hidden">Syndicates</span>
+              <span className="ml-1">({borrowerSyndicates.length})</span>
             </TabsTrigger>
             <TabsTrigger value="bids" className="data-[state=active]:bg-indigo-50 text-sm sm:text-base">
               <span className="hidden sm:inline">Pending Bids</span>
@@ -627,6 +668,127 @@ export default function BorrowerDashboard() {
                       <span className="sm:hidden">New Application</span>
                     </Button>
                   </Link>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* Syndicates Tab */}
+          <TabsContent value="syndicates" className="space-y-4">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-6">My Syndicates</h2>
+
+              {borrowerSyndicates && borrowerSyndicates.length > 0 ? (
+                <div className="space-y-4">
+                  {borrowerSyndicates.map((syndicate) => (
+                    <div
+                      key={syndicate.id}
+                      className="border border-gray-200 rounded-lg p-4 sm:p-6 hover:shadow-md transition-shadow"
+                    >
+                      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4 sm:gap-6">
+                        <div className="flex-1">
+                          <div className="flex items-start justify-between mb-2">
+                            <div>
+                              <h3 className="text-lg font-semibold text-gray-900">
+                                {syndicate.name}
+                              </h3>
+                              <p className="text-sm text-gray-600 mt-1">
+                                {syndicate.description}
+                              </p>
+                            </div>
+                            <Badge className={getStatusColor(syndicate.status)}>
+                              {formatStatus(syndicate.status)}
+                            </Badge>
+                          </div>
+
+                          <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mt-4">
+                            <div>
+                              <p className="text-sm text-gray-500">Total Amount</p>
+                              <p className="text-base font-semibold text-gray-900">
+                                {formatCurrency(syndicate.amount)}
+                              </p>
+                            </div>
+                            {syndicate.rate && (
+                              <div>
+                                <p className="text-sm text-gray-500">Interest Rate</p>
+                                <p className="text-base font-semibold text-gray-900">
+                                  {syndicate.rate}%
+                                </p>
+                              </div>
+                            )}
+                            {syndicate.term && (
+                              <div>
+                                <p className="text-sm text-gray-500">Term</p>
+                                <p className="text-base font-semibold text-gray-900">
+                                  {syndicate.term} months
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          {syndicate.funding_progress !== null && (
+                            <div className="mt-4">
+                              <div className="flex justify-between items-center mb-2">
+                                <span className="text-sm font-medium text-gray-700">
+                                  Funding Progress
+                                </span>
+                                <span className="text-sm text-gray-600">
+                                  {syndicate.funding_progress}%
+                                </span>
+                              </div>
+                              <Progress value={syndicate.funding_progress} className="h-2" />
+                            </div>
+                          )}
+
+                          {syndicate.groups && syndicate.groups.length > 0 && (
+                            <div className="mt-4 pt-4 border-t border-gray-200">
+                              <p className="text-sm font-medium text-gray-700 mb-2">
+                                Participants ({syndicate.groups.length})
+                              </p>
+                              <div className="space-y-2">
+                                {syndicate.groups.map((group) => (
+                                  <div
+                                    key={group.id}
+                                    className="flex items-center justify-between text-sm bg-gray-50 p-3 rounded"
+                                  >
+                                    <div className="flex-1">
+                                      <span className="font-medium">Funder ID: {group.funder_id}</span>
+                                      <span className="text-gray-600 ml-2">
+                                        Pledge: {formatCurrency(group.pledge_amount)}
+                                      </span>
+                                    </div>
+                                    <Badge className={getStatusColor(group.status)}>
+                                      {formatStatus(group.status)}
+                                    </Badge>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="mt-4 pt-4 border-t border-gray-200">
+                            <div className="flex gap-3">
+                              <Link href={`/syndicate/${syndicate.id}`}>
+                                <Button variant="outline" size="sm">
+                                  View Details
+                                </Button>
+                              </Link>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
+                    <DollarSign className="h-8 w-8 text-gray-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No Syndicates Yet</h3>
+                  <p className="text-gray-600 max-w-sm mx-auto">
+                    Your loan applications will appear here once they receive funding commitments.
+                  </p>
                 </div>
               )}
             </div>
