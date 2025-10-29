@@ -64,6 +64,7 @@ interface Syndicate {
   loan_application?: {
     id: number;
     application_id: string;
+    user_id: number;
   };
 }
 
@@ -78,7 +79,7 @@ export default function SyndicateDetailsPage() {
 
   // Check if logged-in user is the lead funder or creator
   const isLeadFunder = user && syndicate && user.id === syndicate.lead_funder;
-  const isCreator = user && syndicate && user.id === syndicate.created_by;
+  const isCreator = user && syndicate && syndicate.loan_application && user.id === syndicate.loan_application.user_id;
   const hasNoLeadFunder = syndicate && !syndicate.lead_funder;
 
   useEffect(() => {
@@ -140,6 +141,8 @@ export default function SyndicateDetailsPage() {
         return "bg-yellow-100 text-yellow-800 border-yellow-200";
       case "rejected":
         return "bg-red-100 text-red-800 border-red-200";
+      case "revoked":
+        return "bg-orange-100 text-orange-800 border-orange-200";
       case "active":
         return "bg-blue-100 text-blue-800 border-blue-200";
       default:
@@ -185,7 +188,10 @@ export default function SyndicateDetailsPage() {
     if (!syndicate) return;
     
     try {
-      const response = await authPost(`/v1/syndicates/${syndicate.id}/approve-commit/${commitId}`, {});
+      const response = await authPost(`/v1/syndicates/${syndicate.id}/update-commit/${commitId}`, {
+        action: 'approve',
+        reason: null
+      });
       const data = await response.json();
 
       if (response.ok) {
@@ -209,7 +215,10 @@ export default function SyndicateDetailsPage() {
     if (!syndicate) return;
     
     try {
-      const response = await authPost(`/v1/syndicates/${syndicate.id}/reject-commit/${commitId}`, {});
+      const response = await authPost(`/v1/syndicates/${syndicate.id}/update-commit/${commitId}`, {
+        action: 'reject',
+        reason: null
+      });
       const data = await response.json();
 
       if (response.ok) {
@@ -229,15 +238,46 @@ export default function SyndicateDetailsPage() {
     }
   };
 
+  const handleRevokeCommit = async (commitId: number) => {
+    if (!syndicate) return;
+    
+    // Show confirmation
+    const proceed = window.confirm(
+      "This action will revoke this previously accepted commit. Do you want to continue?"
+    );
+    
+    if (!proceed) return;
+    
+    try {
+      const response = await authPost(`/v1/syndicates/revoke-commit/${commitId}`, {});
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success("Commit revoked successfully");
+        // Refresh the syndicate data
+        fetchSyndicateDetails();
+      } else {
+        toast.error("Failed to revoke commit", {
+          description: data.message || "Please try again later.",
+        });
+      }
+    } catch (error) {
+      console.error("Error revoking commit:", error);
+      toast.error("Error", {
+        description: "Failed to revoke commit.",
+      });
+    }
+  };
+
   const handleMakeLead = async (bidId: number) => {
     if (!syndicate) return;
     
-    // Show confirmation dialog
-    const confirmed = window.confirm(
+    // Show confirmation
+    const proceed = window.confirm(
       "This action will make this bidder the lead funder of this syndicate and reject all other bids. Do you want to continue?"
     );
     
-    if (!confirmed) return;
+    if (!proceed) return;
     
     try {
       const response = await authPost(`/v1/syndicate-bids/accept/${bidId}`, {});
@@ -256,6 +296,51 @@ export default function SyndicateDetailsPage() {
       console.error("Error accepting bid as lead funder:", error);
       toast.error("Error", {
         description: "Failed to accept bid as lead funder.",
+      });
+    }
+  };
+
+  const handleMakeLeadFromGroup = async (funderId: number) => {
+    if (!syndicate) return;
+    
+    // Show confirmation
+    const proceed = window.confirm(
+      "This action will make this funder the lead funder of this syndicate and reject all other pending commitments. Do you want to continue?"
+    );
+    
+    if (!proceed) return;
+    
+    try {
+      // First, approve the pending group to make this funder the lead
+      const pendingGroup = syndicate.groups.find(group => group.funder_id === funderId && group.status.toLowerCase() === 'pending');
+      
+      if (!pendingGroup) {
+        toast.error("Pending commitment not found", {
+          description: "Please try refreshing the page.",
+        });
+        return;
+      }
+
+      // Approve this commitment using the new update-commit endpoint
+      const response = await authPost(`/v1/syndicates/${syndicate.id}/update-commit/${pendingGroup.id}`, {
+        action: 'approve',
+        reason: null
+      });
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success("Funder appointed as lead funder successfully");
+        // Refresh the syndicate data
+        fetchSyndicateDetails();
+      } else {
+        toast.error("Failed to appoint lead funder", {
+          description: data.message || "Please try again later.",
+        });
+      }
+    } catch (error) {
+      console.error("Error appointing lead funder:", error);
+      toast.error("Error", {
+        description: "Failed to appoint lead funder.",
       });
     }
   };
@@ -431,6 +516,31 @@ export default function SyndicateDetailsPage() {
                       </Button>
                     </div>
                   )}
+
+                  {/* Show revoke button for lead funder and approved status */}
+                  {isLeadFunder && group.status.toLowerCase() === 'approved' && (
+                    <div className="pt-3 border-t border-gray-200">
+                      <Button 
+                        onClick={() => handleRevokeCommit(group.id)}
+                        variant="outline"
+                        className="w-full text-orange-600 border-orange-300 hover:bg-orange-50"
+                      >
+                        Revoke Commit
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Show re-approve button for lead funder and revoked status */}
+                  {isLeadFunder && group.status.toLowerCase() === 'revoked' && (
+                    <div className="pt-3 border-t border-gray-200">
+                      <Button 
+                        onClick={() => handleApproveCommit(group.id)}
+                        className="w-full bg-green-600 hover:bg-green-700"
+                      >
+                        Re-approve Commit
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -444,8 +554,9 @@ export default function SyndicateDetailsPage() {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
             <h2 className="text-xl font-semibold mb-6">Recent Bids</h2>
             
-            {syndicate.bids.length > 0 ? (
+            {(syndicate.bids.length > 0 || (syndicate.groups.some(g => g.status.toLowerCase() === 'pending'))) ? (
               <div className="space-y-4">
+                {/* Show regular bids if they exist */}
                 {syndicate.bids.map((bid) => (
                   <div
                     key={bid.id}
@@ -495,6 +606,58 @@ export default function SyndicateDetailsPage() {
                       <div className="pt-3 border-t border-gray-200">
                         <Button 
                           onClick={() => handleMakeLead(bid.id)}
+                          className="w-full bg-indigo-600 hover:bg-indigo-700"
+                        >
+                          Make Lead
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {/* Show pending groups as "pending commitments" if no bids exist */}
+                {syndicate.bids.length === 0 && syndicate.groups.filter(g => g.status.toLowerCase() === 'pending').map((group) => (
+                  <div
+                    key={group.id}
+                    className="border border-yellow-200 rounded-lg p-4 bg-yellow-50 hover:bg-yellow-100 transition-colors"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-gray-900">
+                            {group.funder?.name || `Funder ID: ${group.funder_id}`}
+                          </h3>
+                          <Link href={`/auth/public-profile/${group.funder_id}`}>
+                            <Button variant="link" size="sm" className="h-auto p-0">
+                              View Profile
+                            </Button>
+                          </Link>
+                        </div>
+                        <p className="text-sm text-gray-600">
+                          Pledge Amount: {formatCurrency(group.pledge_amount)}
+                        </p>
+                      </div>
+                      <Badge className={getStatusBadgeColor(group.status)}>
+                        {group.status.toUpperCase()}
+                      </Badge>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-xs text-gray-500">Submitted</Label>
+                        <p className="text-sm font-medium">{formatDate(group.created_at)}</p>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-gray-500">Last Updated</Label>
+                        <p className="text-sm font-medium">{formatDate(group.updated_at)}</p>
+                      </div>
+                    </div>
+
+                    {/* Show "Make Lead" button for creator when there's no lead funder */}
+                    {isCreator && hasNoLeadFunder && (
+                      <div className="pt-3 border-t border-yellow-300">
+                        <Button 
+                          onClick={() => handleMakeLeadFromGroup(group.funder_id)}
                           className="w-full bg-indigo-600 hover:bg-indigo-700"
                         >
                           Make Lead

@@ -22,15 +22,15 @@ interface LoanApplication {
     id: number;
     name: string;
     amount: number;
-    rate: number;
-    term: number;
-    risk: string;
-    funding_progress: number;
+    rate: number | null;
+    term: number | null;
+    risk: string | null;
+    funding_progress: number | null;
     lead_funder: {
       id: number;
       name: string;
       institution_name: string | null;
-    };
+    } | null;
     bids: SyndicateBid[];
   } | null;
 }
@@ -89,6 +89,8 @@ export default function CommitPage() {
   const [commitmentAmount, setCommitmentAmount] = useState("");
   const [fundingType, setFundingType] = useState("syndicate");
   const [notes, setNotes] = useState("");
+  const [bidRate, setBidRate] = useState("");
+  const [bidTerm, setBidTerm] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -172,7 +174,20 @@ export default function CommitPage() {
       return loanApplication?.loan_amount || 0;
     }
     const syndicate = loanApplication.syndicate;
+    if (syndicate.funding_progress === null) {
+      return syndicate.amount;
+    }
     return syndicate.amount * (1 - syndicate.funding_progress / 100);
+  };
+
+  const shouldShowBidInputs = () => {
+    if (!loanApplication || !loanApplication.syndicate) return false;
+    const syndicate = loanApplication.syndicate;
+    // Show inputs if: no lead funder AND (no bids OR all bids are pending)
+    const hasNoLeadFunder = !syndicate.lead_funder;
+    const hasNoBids = syndicate.bids.length === 0;
+    const allBidsPending = syndicate.bids.length > 0 && syndicate.bids.every(bid => bid.status.toLowerCase() === 'pending');
+    return hasNoLeadFunder && (hasNoBids || allBidsPending);
   };
 
   const handleSubmit = async () => {
@@ -181,6 +196,22 @@ export default function CommitPage() {
         description: "Please enter a valid commitment amount.",
       });
       return;
+    }
+
+    // Validate rate and term if they're required
+    if (shouldShowBidInputs()) {
+      if (!bidRate || parseFloat(bidRate) <= 0) {
+        toast.error("Invalid Rate", {
+          description: "Please enter a valid interest rate.",
+        });
+        return;
+      }
+      if (!bidTerm || parseFloat(bidTerm) <= 0) {
+        toast.error("Invalid Term", {
+          description: "Please enter a valid loan term in months.",
+        });
+        return;
+      }
     }
 
     if (!user) {
@@ -211,12 +242,23 @@ export default function CommitPage() {
 
     setIsSubmitting(true);
     try {
+      // Use user's rate and term if they provided them, otherwise use syndicate values or defaults
+      const rateToUse = shouldShowBidInputs() && bidRate 
+        ? parseFloat(bidRate) 
+        : (activeSyndicate.rate || 0);
+      const termToUse = shouldShowBidInputs() && bidTerm 
+        ? `${bidTerm} months`
+        : (activeSyndicate.term ? `${activeSyndicate.term} months` : '24 months');
+
       const payload = {
+        syndicate_id: syndicateIdToUse,
         amount: parseFloat(commitmentAmount),
+        rate: rateToUse,
+        term: termToUse,
         notes: notes || "",
       };
 
-      const response = await authPost(`/v1/join-syndicate/${syndicateIdToUse}`, payload);
+      const response = await authPost(`/v1/syndicate-bids/submit`, payload);
       const data = await response.json();
 
       if (response.ok && data.success) {
@@ -301,11 +343,11 @@ export default function CommitPage() {
               <>
                 <div>
                   <Label>Interest Rate</Label>
-                  <p className="font-medium">{activeSyndicate.rate}%</p>
+                  <p className="font-medium">{activeSyndicate.rate ? `${activeSyndicate.rate}%` : 'TBD'}</p>
                 </div>
                 <div>
                   <Label>Term</Label>
-                  <p className="font-medium">{activeSyndicate.term} months</p>
+                  <p className="font-medium">{activeSyndicate.term ? `${activeSyndicate.term} months` : 'TBD'}</p>
                 </div>
                 <div>
                   <Label>Syndicate Name</Label>
@@ -379,6 +421,47 @@ export default function CommitPage() {
               </RadioGroup>
             </div>
 
+            {shouldShowBidInputs() && (
+              <>
+                <div>
+                  <Label htmlFor="bidRate">Interest Rate (%) *</Label>
+                  <Input
+                    id="bidRate"
+                    type="number"
+                    placeholder="e.g., 8.5"
+                    value={bidRate}
+                    onChange={(e) => setBidRate(e.target.value)}
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    className="mt-1"
+                    required
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    Enter your proposed interest rate for this loan
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="bidTerm">Loan Term (Months) *</Label>
+                  <Input
+                    id="bidTerm"
+                    type="number"
+                    placeholder="e.g., 24"
+                    value={bidTerm}
+                    onChange={(e) => setBidTerm(e.target.value)}
+                    min="1"
+                    max="120"
+                    className="mt-1"
+                    required
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    Enter the loan term in months (e.g., 24 for 2 years)
+                  </p>
+                </div>
+              </>
+            )}
+
             <div>
               <Label htmlFor="notes">Notes (Optional)</Label>
               <textarea
@@ -405,16 +488,24 @@ export default function CommitPage() {
             {activeSyndicate && (
               <>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Estimated Annual Yield</span>
-                  <span className="font-medium">{activeSyndicate.rate}%</span>
+                  <span className="text-gray-600">Interest Rate</span>
+                  <span className="font-medium">
+                    {shouldShowBidInputs() && bidRate 
+                      ? `${bidRate}%` 
+                      : (activeSyndicate.rate ? `${activeSyndicate.rate}%` : 'TBD')}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Term</span>
-                  <span className="font-medium">{activeSyndicate.term} months</span>
+                  <span className="font-medium">
+                    {shouldShowBidInputs() && bidTerm 
+                      ? `${bidTerm} months` 
+                      : (activeSyndicate.term ? `${activeSyndicate.term} months` : 'TBD')}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Risk Level</span>
-                  <span className="font-medium capitalize">{activeSyndicate.risk}</span>
+                  <span className="font-medium capitalize">{activeSyndicate.risk || 'TBD'}</span>
                 </div>
               </>
             )}
@@ -431,7 +522,12 @@ export default function CommitPage() {
             <Button 
               className="bg-indigo-600 hover:bg-indigo-700 flex-1"
               onClick={handleSubmit}
-              disabled={isSubmitting || !commitmentAmount || parseFloat(commitmentAmount) <= 0}
+              disabled={
+                isSubmitting || 
+                !commitmentAmount || 
+                parseFloat(commitmentAmount) <= 0 ||
+                (shouldShowBidInputs() && (!bidRate || !bidTerm))
+              }
             >
               {isSubmitting ? "Submitting..." : "Join Syndicate"}
             </Button>
